@@ -20,6 +20,9 @@ importers:
       '@node-rs/argon2':
         specifier: ^2.1.0
         version: 2.1.0
+      '@tldraw/tlschema':
+        specifier: 5.3.1
+        version: 5.3.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       archiver:
         specifier: ^8.0.0
         version: 8.0.0

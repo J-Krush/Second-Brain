@@ -5,7 +5,7 @@ import { syncInlineRefs } from "./filerefs";
 
 // Columns safe to ship to the client: excludes the 1536-float `embedding` and
 // the internal generated `search` tsvector. Used for every read + returning().
-const cardCols = {
+export const cardCols = {
   id: cards.id,
   type: cards.type,
   title: cards.title,

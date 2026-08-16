@@ -27,6 +27,15 @@ export default async function CardPage({
     <main className="mx-auto max-w-2xl px-6 py-8">
       <CardEditor detail={detail} />
 
+      {detail.card.type === "board" && (
+        <Link
+          href={`/boards/${detail.card.id}`}
+          className="mt-4 inline-block rounded-md bg-accent px-4 py-2 text-sm font-medium text-base"
+        >
+          Open canvas →
+        </Link>
+      )}
+
       <div className="mt-6">
         <TagEditor cardId={detail.card.id} attached={detail.tags} allTags={allTags} />
       </div>

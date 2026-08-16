@@ -21,10 +21,11 @@ export function CardRow({ card }: { card: CardLike }) {
   const style = styleFor(card.type);
   const isQuote = card.type === "quote" || card.type === "mantra";
   const body = snippet(card.body);
+  const href = card.type === "board" ? `/boards/${card.id}` : `/cards/${card.id}`;
 
   return (
     <Link
-      href={`/cards/${card.id}`}
+      href={href}
       className={`block border-l-2 ${style.accent} rounded-r-lg bg-surface px-4 py-3 transition-colors hover:bg-surface-2`}
     >
       <div className="mb-1 flex items-center gap-2">

@@ -16,6 +16,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1111.0",
     "@neondatabase/serverless": "^1.1.0",
     "@node-rs/argon2": "^2.1.0",
+    "@tldraw/tlschema": "5.3.1",
     "archiver": "^8.0.0",
     "drizzle-orm": "^0.45.2",
     "iron-session": "^8.0.4",
