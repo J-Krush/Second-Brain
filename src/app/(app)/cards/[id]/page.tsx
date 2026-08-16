@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CardEditor } from "@/components/CardEditor";
+import { TagEditor } from "@/components/TagEditor";
 import { getCardDetail } from "@/lib/cards";
+import { listTags } from "@/lib/tags";
 
 export const dynamic = "force-dynamic";
 
@@ -13,24 +15,15 @@ export default async function CardPage({
   const { id } = await params;
   const detail = await getCardDetail(id);
   if (!detail) notFound();
+  const allTags = await listTags();
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-8">
       <CardEditor detail={detail} />
 
-      {detail.tags.length > 0 && (
-        <div className="mt-6 flex flex-wrap gap-2">
-          {detail.tags.map((t) => (
-            <span
-              key={t.id}
-              className="rounded-full border border-line px-2 py-0.5 text-xs text-ink-dim"
-              style={t.color ? { borderColor: t.color, color: t.color } : undefined}
-            >
-              {t.name}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="mt-6">
+        <TagEditor cardId={detail.card.id} attached={detail.tags} allTags={allTags} />
+      </div>
 
       {(detail.boards.length > 0 || detail.backlinks.length > 0) && (
         <div className="mt-8 border-t border-line pt-6 text-sm">

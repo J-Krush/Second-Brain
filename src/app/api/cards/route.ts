@@ -31,9 +31,11 @@ export async function GET(request: NextRequest) {
   if (!(await authorize(request))) return unauthorized();
   const sp = request.nextUrl.searchParams;
   const view = sp.get("view") === "library" ? "library" : "inbox";
+  const tagRaw = sp.get("tag");
   const result = await listCards({
     view,
     type: sp.get("type") ?? undefined,
+    tagId: tagRaw ? Number(tagRaw) : undefined,
     cursor: sp.get("cursor") ?? undefined,
   });
   return NextResponse.json(result);

@@ -68,6 +68,7 @@ export async function createCard(input: CreateCardInput): Promise<CardView> {
 export interface ListParams {
   view: "inbox" | "library";
   type?: string;
+  tagId?: number;
   limit?: number;
   cursor?: string; // "<iso>|<uuid>"
 }
@@ -84,6 +85,11 @@ export async function listCards(params: ListParams): Promise<ListResult> {
   const filters = [isNull(cards.deletedAt)];
   if (params.type && CARD_TYPES[params.type]) {
     filters.push(eq(cards.type, params.type));
+  }
+  if (params.tagId !== undefined) {
+    filters.push(
+      sql`EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = ${cards.id} AND ct.tag_id = ${params.tagId})`,
+    );
   }
   if (params.cursor) {
     const [iso, id] = params.cursor.split("|");

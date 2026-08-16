@@ -1,7 +1,15 @@
 import Link from "next/link";
-import type { CardView } from "@/lib/cards";
 import { relativeTime } from "@/lib/format";
 import { styleFor } from "./card-style";
+
+export interface CardLike {
+  id: string;
+  type: string;
+  title: string | null;
+  body: string | null;
+  url: string | null;
+  createdAt: Date | string;
+}
 
 function snippet(text: string | null, max = 240): string {
   if (!text) return "";
@@ -9,7 +17,7 @@ function snippet(text: string | null, max = 240): string {
   return clean.length > max ? clean.slice(0, max) + "\u2026" : clean;
 }
 
-export function CardRow({ card }: { card: CardView }) {
+export function CardRow({ card }: { card: CardLike }) {
   const style = styleFor(card.type);
   const isQuote = card.type === "quote" || card.type === "mantra";
   const body = snippet(card.body);
