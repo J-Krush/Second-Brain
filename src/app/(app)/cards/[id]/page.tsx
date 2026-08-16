@@ -8,6 +8,14 @@ import { renderMarkdown } from "@/lib/markdown";
 
 export const dynamic = "force-dynamic";
 
+// Display name for a related card: title, else a trimmed body snippet.
+function relationName(rel: { title: string | null; body: string | null }): string {
+  if (rel.title) return rel.title;
+  const snippet = (rel.body ?? "").replace(/\s+/g, " ").trim();
+  if (!snippet) return "Untitled";
+  return snippet.length > 60 ? snippet.slice(0, 60) + "\u2026" : snippet;
+}
+
 export default async function CardPage({
   params,
 }: {
@@ -30,7 +38,7 @@ export default async function CardPage({
       {detail.card.type === "board" && (
         <Link
           href={`/boards/${detail.card.id}`}
-          className="mt-4 inline-block rounded-md bg-accent px-4 py-2 text-sm font-medium text-base"
+          className="mt-4 inline-block rounded-md bg-accent px-4 py-2 font-mono text-xs font-bold uppercase tracking-wider text-inset"
         >
           Open canvas →
         </Link>
@@ -73,17 +81,19 @@ export default async function CardPage({
         </div>
       )}
 
-      {(detail.boards.length > 0 || detail.backlinks.length > 0) && (
+      {(detail.boards.length > 0 ||
+        detail.links.length > 0 ||
+        detail.backlinks.length > 0) && (
         <div className="mt-8 border-t border-line pt-6 text-sm">
           {detail.boards.length > 0 && (
-            <div className="mb-4">
-              <h4 className="mb-2 text-xs uppercase tracking-wide text-ink-faint">
+            <div className="mb-5">
+              <h4 className="mb-2 font-mono text-[11px] uppercase tracking-widest text-ink-faint">
                 Appears on boards
               </h4>
               <ul className="flex flex-col gap-1">
                 {detail.boards.map((b) => (
                   <li key={b.id}>
-                    <Link href={`/cards/${b.id}`} className="text-accent hover:underline">
+                    <Link href={`/boards/${b.id}`} className="text-accent hover:underline">
                       {b.title ?? "Untitled board"}
                     </Link>
                   </li>
@@ -91,18 +101,47 @@ export default async function CardPage({
               </ul>
             </div>
           )}
+          {detail.links.length > 0 && (
+            <div className="mb-5">
+              <h4 className="mb-2 font-mono text-[11px] uppercase tracking-widest text-ink-faint">
+                Links to
+              </h4>
+              <ul className="flex flex-col gap-1.5">
+                {detail.links.map((b) => (
+                  <li key={b.id} className="flex items-center gap-2">
+                    <span className="text-ink-faint">→</span>
+                    <Link
+                      href={b.type === "board" ? `/boards/${b.id}` : `/cards/${b.id}`}
+                      className="text-ink-dim hover:text-ink"
+                    >
+                      {relationName(b)}
+                    </Link>
+                    {b.label && (
+                      <span className="font-mono text-[11px] text-ink-faint">{b.label}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {detail.backlinks.length > 0 && (
             <div>
-              <h4 className="mb-2 text-xs uppercase tracking-wide text-ink-faint">
+              <h4 className="mb-2 font-mono text-[11px] uppercase tracking-widest text-ink-faint">
                 Linked from
               </h4>
-              <ul className="flex flex-col gap-1">
+              <ul className="flex flex-col gap-1.5">
                 {detail.backlinks.map((b) => (
-                  <li key={b.id}>
-                    <Link href={`/cards/${b.id}`} className="text-ink-dim hover:text-ink">
-                      {b.title ?? "Untitled"}
+                  <li key={b.id} className="flex items-center gap-2">
+                    <span className="text-ink-faint">←</span>
+                    <Link
+                      href={b.type === "board" ? `/boards/${b.id}` : `/cards/${b.id}`}
+                      className="text-ink-dim hover:text-ink"
+                    >
+                      {relationName(b)}
                     </Link>
-                    {b.label && <span className="text-ink-faint"> — {b.label}</span>}
+                    {b.label && (
+                      <span className="font-mono text-[11px] text-ink-faint">{b.label}</span>
+                    )}
                   </li>
                 ))}
               </ul>

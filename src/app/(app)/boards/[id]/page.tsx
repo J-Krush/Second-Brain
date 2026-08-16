@@ -4,6 +4,7 @@ import { inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { cards } from "@/db/schema";
 import { BoardCanvas } from "@/components/board/BoardCanvas";
+import { BoardHeader } from "@/components/board/BoardHeader";
 import { getBoard } from "@/lib/boards";
 
 export const dynamic = "force-dynamic";
@@ -32,22 +33,27 @@ export default async function BoardPage({
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col">
-      <div className="flex items-center gap-2 border-b border-line px-6 py-2 text-sm">
-        {trailIds.map((tid, i) => (
-          <span key={tid} className="flex items-center gap-2">
-            <Link
-              href={`/boards/${tid}?trail=${trailIds.slice(0, i).join(",")}`}
-              className="text-ink-dim hover:text-ink"
-            >
-              {crumbById.get(tid) ?? "Board"}
-            </Link>
-            <span className="text-ink-faint">/</span>
-          </span>
-        ))}
-        <span className="font-medium text-ink">
-          {board.board.title ?? "Untitled board"}
-        </span>
-      </div>
+      {trailIds.length > 0 && (
+        <div className="flex items-center gap-2 border-b border-line px-6 py-2 font-mono text-xs uppercase tracking-wider">
+          {trailIds.map((tid, i) => (
+            <span key={tid} className="flex items-center gap-2">
+              <Link
+                href={`/boards/${tid}?trail=${trailIds.slice(0, i).join(",")}`}
+                className="text-ink-faint hover:text-ink"
+              >
+                {crumbById.get(tid) ?? "Board"}
+              </Link>
+              <span className="text-ink-faint">/</span>
+            </span>
+          ))}
+          <span className="text-ink">{board.board.title ?? "Untitled board"}</span>
+        </div>
+      )}
+      <BoardHeader
+        boardId={board.board.id}
+        initialTitle={board.board.title}
+        initialBody={board.board.body}
+      />
       <div className="flex-1">
         <BoardCanvas data={board} trailIds={trailIds} />
       </div>

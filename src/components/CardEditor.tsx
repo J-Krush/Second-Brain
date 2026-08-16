@@ -117,7 +117,7 @@ export function CardEditor({ detail }: { detail: CardDetail }) {
           <button
             onClick={() => void save()}
             disabled={!dirty || busy}
-            className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-base transition-opacity disabled:opacity-40"
+            className="rounded-md bg-accent px-4 py-1.5 font-mono text-xs font-bold uppercase tracking-wider text-inset transition-opacity disabled:opacity-40"
           >
             Save
           </button>
@@ -134,7 +134,7 @@ export function CardEditor({ detail }: { detail: CardDetail }) {
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Title"
-        className="w-full bg-transparent font-serif text-2xl text-ink outline-none placeholder:text-ink-faint"
+        className="w-full bg-transparent font-display text-2xl font-bold tracking-tight text-ink outline-none placeholder:text-ink-faint"
       />
 
       {(type === "link" || type === "video") && (
@@ -155,7 +155,13 @@ export function CardEditor({ detail }: { detail: CardDetail }) {
           e.preventDefault();
           void handleFiles(e.dataTransfer.files);
         }}
-        placeholder="Write in markdown… (drag images in, or Attach)"
+        placeholder={
+          type === "link"
+            ? "Why you saved this, your notes… (markdown)"
+            : type === "video"
+              ? "What you got out of it… (markdown)"
+              : "Write in markdown… (drag images in, or Attach)"
+        }
         rows={16}
         className="w-full resize-y rounded-lg border border-line bg-surface px-4 py-3 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink-faint"
       />

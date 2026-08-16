@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cardTags, cards, edges, placements, tags } from "@/db/schema";
 import { syncInlineRefs } from "./filerefs";
@@ -71,6 +71,7 @@ export interface ListParams {
   view: "inbox" | "library";
   type?: string;
   tagId?: number;
+  order?: "asc" | "desc"; // created_at; default desc (newest first)
   limit?: number;
   cursor?: string; // "<iso>|<uuid>"
 }
@@ -97,9 +98,11 @@ export async function listCards(params: ListParams): Promise<ListResult> {
     const [iso, id] = params.cursor.split("|");
     if (iso && id) {
       // Keyset pagination on the (created_at, id) tuple, matching the
-      // cards_inbox_idx ordering.
+      // cards_inbox_idx ordering; comparison direction follows the sort.
       filters.push(
-        sql`(${cards.createdAt}, ${cards.id}) < (${iso}::timestamptz, ${id}::uuid)`,
+        params.order === "asc"
+          ? sql`(${cards.createdAt}, ${cards.id}) > (${iso}::timestamptz, ${id}::uuid)`
+          : sql`(${cards.createdAt}, ${cards.id}) < (${iso}::timestamptz, ${id}::uuid)`,
       );
     }
   }
@@ -108,7 +111,11 @@ export async function listCards(params: ListParams): Promise<ListResult> {
     .select(cardCols)
     .from(cards)
     .where(and(...filters))
-    .orderBy(desc(cards.createdAt), desc(cards.id))
+    .orderBy(
+      ...(params.order === "asc"
+        ? [asc(cards.createdAt), asc(cards.id)]
+        : [desc(cards.createdAt), desc(cards.id)]),
+    )
     .limit(limit + 1);
 
   const hasMore = rows.length > limit;
@@ -123,7 +130,8 @@ export interface CardDetail {
   card: CardView;
   tags: { id: number; name: string; color: string | null }[];
   boards: { id: string; title: string | null }[]; // boards this card appears on
-  backlinks: { id: string; title: string | null; label: string | null }[];
+  links: { id: string; type: string; title: string | null; body: string | null; label: string | null }[]; // outgoing
+  backlinks: { id: string; type: string; title: string | null; body: string | null; label: string | null }[];
 }
 
 export async function getCardDetail(id: string): Promise<CardDetail | null> {
@@ -142,9 +150,16 @@ export async function getCardDetail(id: string): Promise<CardDetail | null> {
     .innerJoin(cards, eq(cards.id, placements.boardId))
     .where(and(eq(placements.cardId, id), isNull(cards.deletedAt)));
 
+  // Outgoing links: cards this one points AT.
+  const linkRows = await db
+    .select({ id: cards.id, type: cards.type, title: cards.title, body: cards.body, label: edges.label })
+    .from(edges)
+    .innerJoin(cards, eq(cards.id, edges.toCard))
+    .where(and(eq(edges.fromCard, id), isNull(cards.deletedAt)));
+
   // Backlinks: cards that link TO this one.
   const backlinkRows = await db
-    .select({ id: cards.id, title: cards.title, label: edges.label })
+    .select({ id: cards.id, type: cards.type, title: cards.title, body: cards.body, label: edges.label })
     .from(edges)
     .innerJoin(cards, eq(cards.id, edges.fromCard))
     .where(and(eq(edges.toCard, id), isNull(cards.deletedAt)));
@@ -153,6 +168,7 @@ export async function getCardDetail(id: string): Promise<CardDetail | null> {
     card,
     tags: cardTagRows,
     boards: boardRows,
+    links: linkRows,
     backlinks: backlinkRows,
   };
 }

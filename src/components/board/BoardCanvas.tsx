@@ -6,13 +6,16 @@ import {
   createShapeId,
   getSnapshot,
   loadSnapshot,
+  renderPlaintextFromRichText,
   Tldraw,
   type Editor,
+  type TLRichText,
   type TLShapeId,
   type TLShapePartial,
 } from "tldraw";
 import "tldraw/tldraw.css";
 import { CardContext, type BoardCard } from "./card-context";
+import { openCapture } from "@/lib/capture-bus";
 import { CardShapeUtil, type CardShape } from "./CardShape";
 import type { BoardData } from "@/lib/boards";
 
@@ -30,6 +33,51 @@ interface AnyShape {
   x: number;
   y: number;
   props: { w: number; h: number; cardId: string };
+}
+
+// The subset of tldraw's arrow binding we read for edge sync.
+interface ArrowBindingLike {
+  toId: TLShapeId;
+  props: { terminal: "start" | "end" };
+}
+
+/**
+ * Arrows whose BOTH terminals are bound to card shapes define card-to-card
+ * edges. Key "from|to" -> label (arrow text).
+ */
+function arrowEdges(editor: Editor): Record<string, { from: string; to: string; label: string }> {
+  const result: Record<string, { from: string; to: string; label: string }> = {};
+  const shapes = editor.getCurrentPageShapes() as unknown as AnyShape[];
+  const cardByShapeId: Record<string, string> = {};
+  for (const s of shapes) {
+    if (s.type === "card") cardByShapeId[s.id] = s.props.cardId;
+  }
+  for (const s of shapes) {
+    if (s.type !== "arrow") continue;
+    const bindings = editor.getBindingsFromShape(
+      s.id,
+      "arrow",
+    ) as unknown as ArrowBindingLike[];
+    const start = bindings.find((b) => b.props.terminal === "start");
+    const end = bindings.find((b) => b.props.terminal === "end");
+    const from = start ? cardByShapeId[start.toId] : undefined;
+    const to = end ? cardByShapeId[end.toId] : undefined;
+    if (!from || !to || from === to) continue;
+    let label = "";
+    // Arrow props are outside our AnyShape boundary type; the s.type === "arrow"
+    // check above is the runtime guard, and rich text cannot be schema-validated.
+    const arrowShape = s as unknown as { props: { richText?: TLRichText } };
+    const richText = arrowShape.props.richText;
+    if (richText) {
+      try {
+        label = renderPlaintextFromRichText(editor, richText).trim();
+      } catch {
+        label = "";
+      }
+    }
+    result[`${from}|${to}`] = { from, to, label };
+  }
+  return result;
 }
 
 interface Geometry {
@@ -55,6 +103,7 @@ export function BoardCanvas({
 
   const editorRef = useRef<Editor | null>(null);
   const placementsRef = useRef<Record<string, Geometry>>({});
+  const edgesRef = useRef<Record<string, string>>({}); // "from|to" -> label
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardsRef = useRef(cards);
   cardsRef.current = cards;
@@ -110,15 +159,37 @@ export function BoardCanvas({
     }
     placementsRef.current = current;
 
-    // Persist only the native (non-card) shapes as the board snapshot.
-    const snap = getSnapshot(editor.store);
-    const store = snap.document.store as Record<string, { typeName?: string; type?: string }>;
-    const filteredStore = Object.fromEntries(
-      Object.entries(store).filter(
-        ([, v]) => !(v.typeName === "shape" && v.type === "card"),
-      ),
+    // Sync card-to-card edges from arrows bound to card shapes.
+    const currentEdges = arrowEdges(editor);
+    const knownEdges = edgesRef.current;
+    for (const key of Object.keys(knownEdges)) {
+      if (!currentEdges[key]) {
+        const [from, to] = key.split("|");
+        await fetch("/api/edges", {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ fromCard: from, toCard: to }),
+        });
+      }
+    }
+    for (const [key, edge] of Object.entries(currentEdges)) {
+      if (knownEdges[key] === undefined || knownEdges[key] !== edge.label) {
+        await fetch("/api/edges", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ fromCard: edge.from, toCard: edge.to, label: edge.label || null }),
+        });
+      }
+    }
+    edgesRef.current = Object.fromEntries(
+      Object.entries(currentEdges).map(([k, v]) => [k, v.label]),
     );
-    const snapshot = { ...snap, document: { ...snap.document, store: filteredStore } };
+
+    // Persist the full snapshot INCLUDING card shapes. Stripping them orphans
+    // arrow bindings on reload (loadSnapshot prunes bindings to missing
+    // shapes), silently unbinding arrows. Placements stay authoritative for
+    // card geometry: onMount reconciles card shapes against them after load.
+    const snapshot = getSnapshot(editor.store);
     await fetch(`/api/boards/${boardId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -134,8 +205,9 @@ export function BoardCanvas({
   const onMount = useCallback(
     (editor: Editor) => {
       editorRef.current = editor;
+      editor.user.updateUserPreferences({ colorScheme: "dark" });
 
-      // Load native shapes first (placements are authoritative for cards).
+      // Load the saved snapshot (native shapes + card shapes + bindings).
       if (data.snapshot) {
         try {
           loadSnapshot(editor.store, data.snapshot as Parameters<typeof loadSnapshot>[1]);
@@ -144,14 +216,16 @@ export function BoardCanvas({
         }
       }
 
-      // Create card shapes from placements.
+      // Reconcile card shapes against placements (the source of truth for
+      // membership + geometry): create missing, correct drifted, drop stale.
       const known: Record<string, Geometry> = {};
       for (const p of data.placements) {
         const w = p.w ?? DEFAULT_W;
         const h = p.h ?? DEFAULT_H;
         const id = createShapeId(p.cardId) as TLShapeId;
         known[p.cardId] = { x: p.x, y: p.y, w, h };
-        if (!editor.getShape(id)) {
+        const existing = editor.getShape(id) as unknown as AnyShape | undefined;
+        if (!existing) {
           editor.createShape({
             id,
             type: "card",
@@ -159,10 +233,42 @@ export function BoardCanvas({
             y: p.y,
             props: { w, h, cardId: p.cardId },
           } as unknown as TLShapePartial);
+        } else if (
+          existing.x !== p.x ||
+          existing.y !== p.y ||
+          existing.props.w !== w ||
+          existing.props.h !== h
+        ) {
+          editor.updateShape({
+            id,
+            type: "card",
+            x: p.x,
+            y: p.y,
+            props: { w, h },
+          } as unknown as TLShapePartial);
         }
       }
+      // Card shapes in the snapshot whose placement is gone (removed elsewhere).
+      const stale = (editor.getCurrentPageShapes() as unknown as AnyShape[]).filter(
+        (s) => s.type === "card" && !known[s.props.cardId],
+      );
+      if (stale.length > 0) editor.deleteShapes(stale.map((s) => s.id));
       placementsRef.current = known;
       editor.zoomToFit();
+
+      // Upsert edges for arrows already on the board (idempotent), so boards
+      // drawn before edge-sync existed still surface their relations.
+      const existingEdges = arrowEdges(editor);
+      edgesRef.current = Object.fromEntries(
+        Object.entries(existingEdges).map(([k, v]) => [k, v.label]),
+      );
+      for (const edge of Object.values(existingEdges)) {
+        void fetch("/api/edges", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ fromCard: edge.from, toCard: edge.to, label: edge.label || null }),
+        });
+      }
 
       editor.store.listen(scheduleSave, { source: "user", scope: "document" });
     },
@@ -177,9 +283,11 @@ export function BoardCanvas({
     const editor = editorRef.current;
     if (!editor) return;
     if (placementsRef.current[card.id]) return; // already on the board
+    // Cascade from center so consecutive additions don't stack exactly.
+    const cascade = Object.keys(placementsRef.current).length % 5;
     const center = editor.getViewportPageBounds().center;
-    const x = center.x - DEFAULT_W / 2;
-    const y = center.y - DEFAULT_H / 2;
+    const x = center.x - DEFAULT_W / 2 + cascade * 32;
+    const y = center.y - DEFAULT_H / 2 + cascade * 32;
     setCards((prev) => ({ ...prev, [card.id]: card }));
     const id = createShapeId(card.id) as TLShapeId;
     editor.createShape({
@@ -262,13 +370,28 @@ function AddCardButton({
   }, [q, open]);
 
   return (
-    <div className="absolute left-3 top-3 z-[300]">
+    <div className="absolute left-3 top-3 z-[300] flex items-start gap-2">
       <button
-        onClick={() => setOpen((o) => !o)}
-        className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-base shadow-lg"
+        onClick={() => {
+          setOpen(false);
+          openCapture({
+            onCreated: (card) => {
+              onAdd(card as BoardCard);
+              return true; // stay on the board; the card lands on the canvas
+            },
+          });
+        }}
+        className="rounded-md bg-accent px-3 py-1.5 font-mono text-xs font-bold uppercase tracking-wider text-inset shadow-lg"
       >
-        + Add card
+        + New card
       </button>
+      <div>
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="rounded-md border border-line-2 bg-surface px-3 py-1.5 font-mono text-xs font-bold uppercase tracking-wider text-ink-dim shadow-lg hover:text-ink"
+        >
+          Place existing
+        </button>
       {open && (
         <div className="mt-2 w-72 overflow-hidden rounded-lg border border-line bg-surface shadow-2xl">
           <input
@@ -297,6 +420,7 @@ function AddCardButton({
           </ul>
         </div>
       )}
+      </div>
     </div>
   );
 }

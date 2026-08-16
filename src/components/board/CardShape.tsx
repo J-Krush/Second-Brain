@@ -64,9 +64,8 @@ function CardShapeBody({ shape }: { shape: CardShape }) {
           <div
             style={{
               fontSize: 12,
-              color: "var(--color-ink-dim, #9a958a)",
+              color: "var(--color-ink-dim, #b5bdc3)",
               fontStyle: isQuote ? "italic" : "normal",
-              fontFamily: isQuote ? "Georgia, serif" : "inherit",
               display: "-webkit-box",
               WebkitLineClamp: 4,
               WebkitBoxOrient: "vertical",

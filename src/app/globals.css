@@ -1,18 +1,28 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink: #e7e3da;
-  --color-ink-dim: #9a958a;
-  --color-ink-faint: #6b665c;
-  --color-base: #14130f;
-  --color-surface: #1c1b16;
-  --color-surface-2: #24221c;
-  --color-line: #302d25;
-  --color-accent: #c9a15a;
-  --color-accent-dim: #8a7038;
+  /* Ink slate ramp + acid signal (Bash Squad system) */
+  --color-base: #0a0c0e; /* page background */
+  --color-surface: #15191d; /* card surface */
+  --color-surface-2: #1c2126; /* raised surface */
+  --color-inset: #060708; /* deepest inset */
+  --color-line: #20262b; /* hairline border */
+  --color-line-2: #2c343a; /* stronger border */
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-serif: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --color-ink: #f4f6f7; /* primary text */
+  --color-ink-dim: #b5bdc3; /* secondary text */
+  --color-ink-faint: #7c868d; /* muted */
+
+  --color-accent: #b6ff2e; /* acid signal green */
+  --color-accent-dim: #97e000;
+  --color-ember: #ff5a1f; /* secondary signal */
+  --color-cyan: #38e1ff;
+  --color-amber: #ffc53d;
+  --color-red: #ff4d4d;
+
+  --font-display: var(--font-display), ui-sans-serif, sans-serif;
+  --font-sans: var(--font-sans-var), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-var), ui-monospace, monospace;
 }
 
 :root {
@@ -31,6 +41,23 @@ body {
   box-sizing: border-box;
 }
 
+::selection {
+  background: var(--color-accent);
+  color: var(--color-inset);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-base);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line-2);
+  border: 3px solid var(--color-base);
+}
+
 /* Rendered markdown ("Preview" on the card view). */
 .prose-sb {
   line-height: 1.7;
@@ -39,9 +66,11 @@ body {
 .prose-sb h1,
 .prose-sb h2,
 .prose-sb h3 {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
+  font-weight: 700;
   margin: 1.2em 0 0.5em;
-  line-height: 1.25;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 .prose-sb h1 { font-size: 1.6rem; }
 .prose-sb h2 { font-size: 1.3rem; }
@@ -57,17 +86,17 @@ body {
   padding-left: 1em;
   margin: 1em 0;
   color: var(--color-ink-dim);
-  font-family: var(--font-serif);
   font-style: italic;
 }
 .prose-sb code {
+  font-family: var(--font-mono);
   background: var(--color-surface-2);
   padding: 0.1em 0.35em;
   border-radius: 4px;
   font-size: 0.9em;
 }
 .prose-sb pre {
-  background: var(--color-surface);
+  background: var(--color-inset);
   border: 1px solid var(--color-line);
   border-radius: 8px;
   padding: 1em;

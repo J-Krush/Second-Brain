@@ -34,7 +34,9 @@ export default function LoginPage() {
         onSubmit={submit}
         className="w-full max-w-sm rounded-xl border border-line bg-surface p-8 shadow-2xl"
       >
-        <h1 className="mb-1 font-serif text-2xl text-ink">Second Brain</h1>
+        <h1 className="mb-1 font-display text-2xl font-bold tracking-tight text-ink">
+          <span className="text-accent">&gt;</span> second brain
+        </h1>
         <p className="mb-6 text-sm text-ink-faint">
           One place for everything.
         </p>
@@ -50,7 +52,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={busy || password.length === 0}
-          className="mt-5 w-full rounded-lg bg-accent px-4 py-3 font-medium text-base transition-opacity disabled:opacity-40"
+          className="mt-5 w-full rounded-lg bg-accent px-4 py-3 font-mono text-sm font-bold uppercase tracking-wider text-inset transition-opacity disabled:opacity-40"
         >
           {busy ? "..." : "Enter"}
         </button>

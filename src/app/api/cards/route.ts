@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
     view,
     type: sp.get("type") ?? undefined,
     tagId: tagRaw ? Number(tagRaw) : undefined,
+    order: sp.get("order") === "asc" ? "asc" : "desc",
     cursor: sp.get("cursor") ?? undefined,
   });
   return NextResponse.json(result);

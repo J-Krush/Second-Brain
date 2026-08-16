@@ -33,8 +33,9 @@ function tagFragment(tagId: number | undefined) {
 }
 
 /**
- * Quick switcher: pg_trgm similarity on title for typo-tolerant, as-you-type
- * matches. Uses the cards_title_trgm GIN index via the `%` operator.
+ * Quick switcher: word_similarity for typo-tolerant, as-you-type matches on
+ * the title, falling back to the body's first line for untitled cards
+ * (thoughts/quotes usually have no title).
  */
 export async function searchQuick(
   q: string,
@@ -44,10 +45,16 @@ export async function searchQuick(
   const rows = await db.execute(sql`
     SELECT c.id, c.type, c.title, c.body, c.url,
            c.created_at AS "createdAt",
-           word_similarity(${q}, coalesce(c.title,'')) AS score
+           greatest(
+             word_similarity(${q}, coalesce(c.title,'')),
+             word_similarity(${q}, left(coalesce(c.body,''), 200))
+           ) AS score
     FROM cards c
     WHERE c.deleted_at IS NULL
-      AND word_similarity(${q}, coalesce(c.title,'')) > 0.2
+      AND greatest(
+            word_similarity(${q}, coalesce(c.title,'')),
+            word_similarity(${q}, left(coalesce(c.body,''), 200))
+          ) > 0.2
       ${typeFragment(filters.type)}
       ${tagFragment(filters.tagId)}
     ORDER BY score DESC
