@@ -1,6 +1,7 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { captureLink } from "@/lib/og";
+import { embedCard } from "@/lib/embeddings";
 import { createCard, listCards } from "@/lib/cards";
 import { authorize, badRequest, unauthorized } from "@/lib/route-helpers";
 
@@ -28,6 +29,7 @@ export async function POST(request: NextRequest) {
   if (card.type === "link" && card.url) {
     after(() => captureLink(card.id, card.url!));
   }
+  after(() => embedCard(card.id));
   return NextResponse.json({ card }, { status: 201 });
 }
 

@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
+import { embedText, embeddingsConfigured } from "./embeddings";
+import { reciprocalRankFusion } from "./rrf";
 
 export type SearchMode = "quick" | "fts" | "semantic" | "hybrid";
 
@@ -76,4 +78,63 @@ export async function searchFts(
     LIMIT ${limit}
   `);
   return rows.rows as unknown as SearchHit[];
+}
+
+/**
+ * Semantic: cosine distance over the pgvector embedding, using the HNSW index
+ * (`<=>` operator). Score is similarity (1 - distance). Cards without an
+ * embedding are excluded by the NOT NULL guard.
+ */
+export async function semanticByVector(
+  vec: number[],
+  filters: SearchFilters = {},
+): Promise<SearchHit[]> {
+  const limit = filters.limit ?? 50;
+  const literal = `[${vec.join(",")}]`;
+  const rows = await db.execute(sql`
+    SELECT c.id, c.type, c.title, c.body, c.url,
+           c.created_at AS "createdAt",
+           1 - (c.embedding <=> ${literal}::vector) AS score
+    FROM cards c
+    WHERE c.deleted_at IS NULL
+      AND c.embedding IS NOT NULL
+      ${typeFragment(filters.type)}
+      ${tagFragment(filters.tagId)}
+    ORDER BY c.embedding <=> ${literal}::vector
+    LIMIT ${limit}
+  `);
+  return rows.rows as unknown as SearchHit[];
+}
+
+export async function searchSemantic(
+  q: string,
+  filters: SearchFilters = {},
+): Promise<SearchHit[]> {
+  const vec = await embedText(q);
+  return semanticByVector(vec, filters);
+}
+
+export interface HybridResult {
+  hits: SearchHit[];
+  degraded: boolean; // true when embeddings are unavailable (fts only)
+}
+
+/**
+ * Hybrid: run FTS and semantic in parallel, fuse with RRF. When embeddings
+ * are not configured it degrades to FTS alone and flags `degraded`.
+ */
+export async function searchHybrid(
+  q: string,
+  filters: SearchFilters = {},
+): Promise<HybridResult> {
+  if (!embeddingsConfigured()) {
+    return { hits: await searchFts(q, filters), degraded: true };
+  }
+  const [fts, semantic] = await Promise.all([
+    searchFts(q, filters),
+    searchSemantic(q, filters),
+  ]);
+  const fused = reciprocalRankFusion([fts, semantic]);
+  const limit = filters.limit ?? 50;
+  return { hits: fused.slice(0, limit), degraded: false };
 }

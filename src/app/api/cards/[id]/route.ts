@@ -2,6 +2,7 @@ import { after, NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { getCardDetail, softDeleteCard, updateCard } from "@/lib/cards";
 import { captureLink } from "@/lib/og";
+import { embedCard } from "@/lib/embeddings";
 import { authorize, badRequest, notFound, unauthorized } from "@/lib/route-helpers";
 
 export const runtime = "nodejs";
@@ -44,6 +45,10 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     (parsed.data.url !== undefined || parsed.data.type !== undefined)
   ) {
     after(() => captureLink(card.id, card.url!));
+  }
+  // Re-embed when the embeddable text changed (embedCard hash-guards no-ops).
+  if (parsed.data.title !== undefined || parsed.data.body !== undefined) {
+    after(() => embedCard(card.id));
   }
   return NextResponse.json({ card });
 }

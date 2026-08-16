@@ -12,14 +12,21 @@ interface TagOption {
 }
 
 const TYPES = Object.keys(CARD_STYLE);
-type Mode = "fts" | "quick";
+type Mode = "hybrid" | "fts" | "semantic" | "quick";
+const MODE_LABELS: Record<Mode, string> = {
+  hybrid: "Hybrid",
+  fts: "Full-text",
+  semantic: "Semantic",
+  quick: "Quick",
+};
 
 export function LibraryView({ tags }: { tags: TagOption[] }) {
   const [q, setQ] = useState("");
-  const [mode, setMode] = useState<Mode>("fts");
+  const [mode, setMode] = useState<Mode>("hybrid");
   const [type, setType] = useState<string | null>(null);
   const [tagId, setTagId] = useState<number | null>(null);
   const [items, setItems] = useState<CardLike[]>([]);
+  const [degraded, setDegraded] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(
@@ -34,7 +41,11 @@ export function LibraryView({ tags }: { tags: TagOption[] }) {
         params.set("q", query);
         params.set("mode", mode);
         const res = await fetch(`/api/search?${params}`, { signal }).catch(() => null);
-        if (res?.ok) rows = (await res.json()).hits ?? [];
+        if (res?.ok) {
+          const data = await res.json();
+          rows = data.hits ?? [];
+          setDegraded(Boolean(data.degraded));
+        }
       } else {
         params.set("view", "library");
         const res = await fetch(`/api/cards?${params}`, { signal }).catch(() => null);
@@ -65,8 +76,8 @@ export function LibraryView({ tags }: { tags: TagOption[] }) {
           className="flex-1 rounded-lg border border-line bg-surface px-4 py-2 text-ink outline-none placeholder:text-ink-faint focus:border-accent-dim"
         />
         {q.trim() && (
-          <div className="flex rounded-lg border border-line text-sm">
-            {(["fts", "quick"] as Mode[]).map((m) => (
+          <div className="flex overflow-hidden rounded-lg border border-line text-sm">
+            {(["hybrid", "fts", "semantic", "quick"] as Mode[]).map((m) => (
               <button
                 key={m}
                 onClick={() => setMode(m)}
@@ -74,7 +85,7 @@ export function LibraryView({ tags }: { tags: TagOption[] }) {
                   mode === m ? "bg-surface-2 text-ink" : "text-ink-faint"
                 }`}
               >
-                {m === "fts" ? "Full-text" : "Quick"}
+                {MODE_LABELS[m]}
               </button>
             ))}
           </div>
@@ -108,6 +119,12 @@ export function LibraryView({ tags }: { tags: TagOption[] }) {
           </button>
         ))}
       </div>
+
+      {degraded && q.trim() && (mode === "hybrid" || mode === "semantic") && (
+        <p className="mb-3 rounded-md border border-line bg-surface px-3 py-2 text-xs text-ink-faint">
+          Semantic search is off (no embedding key set). Showing full-text results.
+        </p>
+      )}
 
       {loading && items.length === 0 ? (
         <p className="py-12 text-center text-ink-faint">Searching…</p>
