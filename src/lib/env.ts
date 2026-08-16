@@ -40,4 +40,7 @@ export const env = {
   get OPENAI_API_KEY() {
     return process.env.OPENAI_API_KEY || undefined;
   },
+  get CRON_SECRET() {
+    return process.env.CRON_SECRET || undefined;
+  },
 };

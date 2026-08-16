@@ -1,10 +1,9 @@
 import { eq } from "drizzle-orm";
 import { parse, type HTMLElement } from "node-html-parser";
 import { db } from "@/db";
-import { cards, files } from "@/db/schema";
+import { cards } from "@/db/schema";
 import { clearRole, setRef } from "./filerefs";
-import { confirmUpload, extForMime, sha256Hex } from "./files";
-import { putObject } from "./r2";
+import { ingestImageBytes } from "./files";
 
 export interface OgData {
   title?: string;
@@ -14,7 +13,6 @@ export interface OgData {
 }
 
 const FETCH_TIMEOUT_MS = 8000;
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 function metaContent(root: HTMLElement, names: string[]): string | undefined {
   for (const name of names) {
@@ -51,39 +49,8 @@ async function ingestRemoteImage(imageUrl: string): Promise<string | null> {
     const res = await fetchWithTimeout(imageUrl, FETCH_TIMEOUT_MS);
     if (!res.ok) return null;
     const mime = res.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
-    if (!mime.startsWith("image/")) return null;
     const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length === 0 || buf.length > MAX_IMAGE_BYTES) return null;
-
-    const sha = sha256Hex(buf);
-    const [existing] = await db
-      .select()
-      .from(files)
-      .where(eq(files.sha256, sha))
-      .limit(1);
-    if (existing?.status === "active") return existing.id;
-
-    const row =
-      existing ??
-      (
-        await db
-          .insert(files)
-          .values({
-            r2Prefix: "",
-            mime,
-            bytes: buf.length,
-            sha256: sha,
-            status: "pending",
-          })
-          .returning()
-      )[0]!;
-    if (!row.r2Prefix) {
-      row.r2Prefix = `files/${row.id}/`;
-      await db.update(files).set({ r2Prefix: row.r2Prefix }).where(eq(files.id, row.id));
-    }
-    await putObject(`${row.r2Prefix}original.${extForMime(mime)}`, buf, mime);
-    await confirmUpload(row.id);
-    return row.id;
+    return await ingestImageBytes(buf, mime);
   } catch {
     return null;
   }

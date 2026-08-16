@@ -36,8 +36,10 @@ export async function checkLoginRate(ip: string): Promise<boolean> {
 
 export function bearerTokenValid(header: string | null): boolean {
   if (!header) return false;
-  const token = env.API_TOKEN;
-  if (!token) return false;
   const prefix = "Bearer ";
-  return header.startsWith(prefix) && header.slice(prefix.length) === token;
+  if (!header.startsWith(prefix)) return false;
+  const presented = header.slice(prefix.length);
+  // Accept the capture-client token or the Vercel cron secret.
+  const accepted = [env.API_TOKEN, env.CRON_SECRET].filter(Boolean);
+  return accepted.includes(presented);
 }

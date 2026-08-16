@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LogoutButton } from "@/components/LogoutButton";
 import { SearchPalette } from "@/components/SearchPalette";
+import { ServiceWorker } from "@/components/ServiceWorker";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -17,6 +18,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Link href="/library" className="hover:text-ink">
               Library
             </Link>
+            <Link href="/settings" className="hover:text-ink">
+              Settings
+            </Link>
           </nav>
           <div className="ml-auto">
             <LogoutButton />
@@ -25,6 +29,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </header>
       {children}
       <SearchPalette />
+      <ServiceWorker />
     </div>
   );
 }

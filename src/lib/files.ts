@@ -148,3 +148,42 @@ export async function deleteFileObjects(prefix: string): Promise<number> {
 export function sha256Hex(buf: Buffer): string {
   return createHash("sha256").update(buf).digest("hex");
 }
+
+const MAX_INGEST_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Ingest raw image bytes we already hold server-side (share target, OG image
+ * cache): dedupe by sha256, store the original, generate thumbnails, activate.
+ * Returns the file id, or null on rejection.
+ */
+export async function ingestImageBytes(
+  buf: Buffer,
+  mime: string,
+): Promise<string | null> {
+  if (!isImage(mime) || buf.length === 0 || buf.length > MAX_INGEST_BYTES) {
+    return null;
+  }
+  const sha = sha256Hex(buf);
+  const [existing] = await db
+    .select()
+    .from(files)
+    .where(eq(files.sha256, sha))
+    .limit(1);
+  if (existing?.status === "active") return existing.id;
+
+  const row =
+    existing ??
+    (
+      await db
+        .insert(files)
+        .values({ r2Prefix: "", mime, bytes: buf.length, sha256: sha, status: "pending" })
+        .returning()
+    )[0]!;
+  if (!row.r2Prefix) {
+    row.r2Prefix = `files/${row.id}/`;
+    await db.update(files).set({ r2Prefix: row.r2Prefix }).where(eq(files.id, row.id));
+  }
+  await putObject(`${row.r2Prefix}original.${extForMime(mime)}`, buf, mime);
+  await confirmUpload(row.id);
+  return row.id;
+}
