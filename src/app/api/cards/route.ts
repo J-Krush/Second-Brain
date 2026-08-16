@@ -1,5 +1,6 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { captureLink } from "@/lib/og";
 import { createCard, listCards } from "@/lib/cards";
 import { authorize, badRequest, unauthorized } from "@/lib/route-helpers";
 
@@ -24,6 +25,9 @@ export async function POST(request: NextRequest) {
   const parsed = createSchema.safeParse(payload);
   if (!parsed.success) return badRequest(parsed.error.issues[0]?.message ?? "invalid");
   const card = await createCard(parsed.data);
+  if (card.type === "link" && card.url) {
+    after(() => captureLink(card.id, card.url!));
+  }
   return NextResponse.json({ card }, { status: 201 });
 }
 

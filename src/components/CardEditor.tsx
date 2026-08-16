@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { CardDetail } from "@/lib/cards";
+import { uploadFile } from "@/lib/upload-client";
 import { CARD_STYLE } from "./card-style";
 
 const TYPES = Object.keys(CARD_STYLE);
@@ -16,6 +17,33 @@ export function CardEditor({ detail }: { detail: CardDetail }) {
   const [url, setUrl] = useState(card.url ?? "");
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function insertAtCursor(text: string) {
+    const el = textareaRef.current;
+    if (!el) {
+      setBody((b) => b + text);
+      return;
+    }
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    setBody((b) => b.slice(0, start) + text + b.slice(end));
+  }
+
+  async function handleFiles(list: FileList | null) {
+    if (!list || list.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(list)) {
+        const id = await uploadFile(file);
+        insertAtCursor(`\n![${file.name}](file:${id})\n`);
+      }
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const dirty =
     type !== card.type ||
@@ -64,6 +92,24 @@ export function CardEditor({ detail }: { detail: CardDetail }) {
             </option>
           ))}
         </select>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="rounded-md border border-line px-3 py-1.5 text-sm text-ink-dim hover:text-ink disabled:opacity-40"
+        >
+          {uploading ? "Uploading…" : "Attach"}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            void handleFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
         <div className="ml-auto flex items-center gap-3">
           {savedAt && !dirty && (
             <span className="text-xs text-ink-faint">saved {savedAt}</span>
@@ -101,9 +147,15 @@ export function CardEditor({ detail }: { detail: CardDetail }) {
       )}
 
       <textarea
+        ref={textareaRef}
         value={body}
         onChange={(e) => setBody(e.target.value)}
-        placeholder="Write in markdown…"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          void handleFiles(e.dataTransfer.files);
+        }}
+        placeholder="Write in markdown… (drag images in, or Attach)"
         rows={16}
         className="w-full resize-y rounded-lg border border-line bg-surface px-4 py-3 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink-faint"
       />

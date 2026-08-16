@@ -1,6 +1,7 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { getCardDetail, softDeleteCard, updateCard } from "@/lib/cards";
+import { captureLink } from "@/lib/og";
 import { authorize, badRequest, notFound, unauthorized } from "@/lib/route-helpers";
 
 export const runtime = "nodejs";
@@ -36,6 +37,14 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   if (!parsed.success) return badRequest(parsed.error.issues[0]?.message ?? "invalid");
   const card = await updateCard(id, parsed.data);
   if (!card) return notFound();
+  // Re-fetch the OG preview when the link target or type just changed.
+  if (
+    card.type === "link" &&
+    card.url &&
+    (parsed.data.url !== undefined || parsed.data.type !== undefined)
+  ) {
+    after(() => captureLink(card.id, card.url!));
+  }
   return NextResponse.json({ card });
 }
 

@@ -18,6 +18,7 @@
     "archiver": "^8.0.0",
     "drizzle-orm": "^0.45.2",
     "iron-session": "^8.0.4",
+    "marked": "^18.0.9",
     "next": "16.3.1",
     "node-html-parser": "^9.0.1",
     "openai": "^7.4.0",

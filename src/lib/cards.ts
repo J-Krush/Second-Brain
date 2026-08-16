@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cardTags, cards, edges, placements, tags } from "@/db/schema";
+import { syncInlineRefs } from "./filerefs";
 
 // Columns safe to ship to the client: excludes the 1536-float `embedding` and
 // the internal generated `search` tsvector. Used for every read + returning().
@@ -62,6 +63,7 @@ export async function createCard(input: CreateCardInput): Promise<CardView> {
       props: input.props ?? {},
     })
     .returning(cardCols);
+  if (row!.body) await syncInlineRefs(row!.id, row!.body);
   return row!;
 }
 
@@ -179,6 +181,7 @@ export async function updateCard(
     .set(patch)
     .where(and(eq(cards.id, id), isNull(cards.deletedAt)))
     .returning(cardCols);
+  if (row && input.body !== undefined) await syncInlineRefs(row.id, input.body);
   return row ?? null;
 }
 

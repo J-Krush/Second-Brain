@@ -32,6 +32,11 @@ export const env = {
   get R2_BUCKET() {
     return required("R2_BUCKET");
   },
+  // Optional override of the S3 endpoint (MinIO, NAS, etc.). Defaults to the
+  // Cloudflare R2 endpoint derived from the account id.
+  get R2_ENDPOINT() {
+    return process.env.R2_ENDPOINT || undefined;
+  },
   get OPENAI_API_KEY() {
     return process.env.OPENAI_API_KEY || undefined;
   },
