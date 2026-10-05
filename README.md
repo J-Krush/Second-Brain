@@ -68,4 +68,4 @@ Multi-user anything, real-time sync between devices, the auto-generated global g
 
 ## License
 
-No `LICENSE` file yet, which means all rights reserved by default. Pick one (MIT is the obvious choice for a personal tool) before anyone needs to rely on it.
+[MIT](LICENSE). Take it, adapt it, deploy your own. The license covers the code; whatever you put into your instance is yours.
