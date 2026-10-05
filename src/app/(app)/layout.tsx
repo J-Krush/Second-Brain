@@ -27,12 +27,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </Suspense>
           </div>
           <AddButton />
-          <Link
-            href="/settings"
-            className="flex h-8 flex-none items-center rounded-md px-3 font-mono text-xs uppercase tracking-widest text-ink-faint transition-colors hover:text-ink"
-          >
-            Settings
-          </Link>
         </div>
       </header>
       {children}
