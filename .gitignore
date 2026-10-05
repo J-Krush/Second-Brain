@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+.env
+.env.local
+.env*.local
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+.open-next/
+.wrangler/
+.dev.vars
+# Per-project CLI logins (keeps them separate from other accounts' global logins)
+.cf-auth/
+.neon-auth/
+# Local copy of generated production secrets (source of truth: GitHub secrets)
+.prod.vars

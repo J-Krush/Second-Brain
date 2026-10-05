@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+@theme {
+  /* Ink slate ramp + acid signal (Bash Squad system) */
+  --color-base: #0a0c0e; /* page background */
+  --color-surface: #15191d; /* card surface */
+  --color-surface-2: #1c2126; /* raised surface */
+  --color-inset: #060708; /* deepest inset */
+  --color-line: #20262b; /* hairline border */
+  --color-line-2: #2c343a; /* stronger border */
+
+  --color-ink: #f4f6f7; /* primary text */
+  --color-ink-dim: #b5bdc3; /* secondary text */
+  --color-ink-faint: #7c868d; /* muted */
+
+  --color-accent: #b6ff2e; /* acid signal green */
+  --color-accent-dim: #97e000;
+  --color-ember: #ff5a1f; /* secondary signal */
+  --color-cyan: #38e1ff;
+  --color-amber: #ffc53d;
+  --color-red: #ff4d4d;
+
+  --font-display: var(--font-display), ui-sans-serif, sans-serif;
+  --font-sans: var(--font-sans-var), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-var), ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-base);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-inset);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-base);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line-2);
+  border: 3px solid var(--color-base);
+}
+
+/* Rendered markdown ("Preview" on the card view). */
+.prose-sb {
+  line-height: 1.7;
+  color: var(--color-ink);
+}
+.prose-sb h1,
+.prose-sb h2,
+.prose-sb h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  margin: 1.2em 0 0.5em;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.prose-sb h1 { font-size: 1.6rem; }
+.prose-sb h2 { font-size: 1.3rem; }
+.prose-sb h3 { font-size: 1.1rem; }
+.prose-sb p { margin: 0.75em 0; }
+.prose-sb a { color: var(--color-accent); text-decoration: underline; }
+.prose-sb ul,
+.prose-sb ol { margin: 0.75em 0; padding-left: 1.4em; }
+.prose-sb ul { list-style: disc; }
+.prose-sb ol { list-style: decimal; }
+.prose-sb blockquote {
+  border-left: 3px solid var(--color-accent);
+  padding-left: 1em;
+  margin: 1em 0;
+  color: var(--color-ink-dim);
+  font-style: italic;
+}
+.prose-sb code {
+  font-family: var(--font-mono);
+  background: var(--color-surface-2);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.prose-sb pre {
+  background: var(--color-inset);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 1em;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+.prose-sb pre code { background: none; padding: 0; }
+.prose-sb img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 1em 0;
+}

@@ -1,0 +1,17 @@
+{
+  // The Workers runtime types redefine globals (Response, fetch, ...) and
+  // clash with the DOM lib the Next app compiles against, so the worker entry
+  // is type-checked in isolation. App code reaches bindings through narrow
+  // boundary interfaces instead of these globals.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["esnext"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["worker.ts", "cloudflare-env.d.ts"]
+}

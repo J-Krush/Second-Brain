@@ -1,0 +1,44 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "second-brain",
+  // Personal Cloudflare account. Pinned so no login or env var can send
+  // this project to another account.
+  "account_id": "0fd505c77dd27db649fcf8203474118f",
+  "main": "./worker.ts",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true },
+  // Thumbnails + image dimensions (replaces sharp). Free tier covers this app.
+  "images": { "binding": "IMAGES" },
+  // Embeddings (@cf/baai/bge-m3). No token needed in the deployed Worker.
+  "ai": { "binding": "AI" },
+  // Neon behind Hyperdrive: pooled, warm connections from the edge.
+  // Create once:  wrangler hyperdrive create second-brain \
+  //                 --connection-string="<neon DIRECT connection string>" \
+  //                 --caching-disabled
+  // Caching MUST stay disabled: Hyperdrive caches reads for 60s by default,
+  // which would hide a just-captured card from the next page load.
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "95b44d1fc8df414e9e306ad5736af9a8",
+      "localConnectionString": "postgres://postgres:postgres@localhost:55432/secondbrain"
+    }
+  ],
+  // Same schedules as the former Vercel crons; dispatched in worker.ts.
+  "triggers": {
+    "crons": ["0 4 * * *", "15 * * * *"]
+  },
+  // Non-secret config. Secrets (APP_PASSWORD_HASH, SESSION_SECRET, API_TOKEN,
+  // CRON_SECRET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY) are GitHub repo secrets
+  // that the deploy workflow ships with each deploy (`--secrets-file`);
+  // `.dev.vars` holds local values for `pnpm preview`.
+  "vars": {
+    "R2_ACCOUNT_ID": "0fd505c77dd27db649fcf8203474118f",
+    "R2_BUCKET": "second-brain"
+  }
+}
