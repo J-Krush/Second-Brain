@@ -74,6 +74,10 @@ The header uses `backdrop-blur`, which creates a containing block that clips `po
 
 Clicking anywhere on a link card used to leave the site. Now the card body opens the detail modal like every other kind; only the small `domain ↗` line (and the URL inside the modal) go external. Consistency beats one saved click.
 
+### D20 · `/ask` is retrieval first, model second
+
+The pipeline (hybrid retrieval → numbered passages → citations) is fixed in `src/lib/ask.ts`; the model is an `LlmProvider` behind `src/lib/llm.ts` chosen by `LLM_PROVIDER`, and nothing else in the app imports a vendor SDK. Consequences: the page is useful with no model at all (it shows what a model would read, which is also how you debug retrieval), swapping vendors is one registry entry, and the UI contract (NDJSON `sources` → `delta` → `done`) never changes. Finding along the way: `websearch_to_tsquery` ANDs terms, so a question like "what do I know about Hyperdrive" returned nothing because no card contains "know"; retrieval uses `match: "any"` (lexemes ORed, `ts_rank` orders by how many hit) while the search box keeps AND semantics.
+
 ## Testing and tooling
 
 ### D18 · Small pure test suite, mandatory manual smoke

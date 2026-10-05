@@ -65,7 +65,7 @@ Visit the Worker URL, log in with the password you hashed. Cron Triggers (`0 4 *
 
 | Kind | Lives in | Example |
 | --- | --- | --- |
-| Non-secret config | `wrangler.jsonc` `vars` | `R2_ACCOUNT_ID`, `R2_BUCKET` |
+| Non-secret config | `wrangler.jsonc` `vars` | `R2_ACCOUNT_ID`, `R2_BUCKET`, and `LLM_PROVIDER` once a provider is registered (its credentials go in the secrets file) |
 | Bindings | `wrangler.jsonc` | `HYPERDRIVE`, `IMAGES`, `AI`, `ASSETS` |
 | Secrets | GitHub repo secrets → `--secrets-file` on deploy | everything in the table above |
 | Local equivalents | `.env.local` (`next dev`), `.dev.vars` (`pnpm preview`) | git-ignored |

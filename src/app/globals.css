@@ -109,3 +109,21 @@ body {
   border-radius: 8px;
   margin: 1em 0;
 }
+/* Inline citations in /ask answers: `[n]` becomes a small accent pill. */
+.prose-sb sup { line-height: 0; }
+.prose-sb a[data-cite] {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 0.3em;
+  margin: 0 0.1em;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--color-accent) 15%, transparent);
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  text-align: center;
+  text-decoration: none;
+  vertical-align: 0.15em;
+}
+.prose-sb a[data-cite]:hover { background: color-mix(in oklab, var(--color-accent) 30%, transparent); }
