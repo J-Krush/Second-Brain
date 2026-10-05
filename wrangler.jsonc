@@ -7,6 +7,11 @@
   "main": "./worker.ts",
   "compatibility_date": "2026-06-01",
   "compatibility_flags": ["nodejs_compat"],
+  // Custom domain on the jkrush.dev zone (same account). Cloudflare creates the
+  // DNS record and certificate on deploy. workers_dev stays on explicitly:
+  // with `routes` set, wrangler would otherwise disable the *.workers.dev URL.
+  "routes": [{ "pattern": "second-brain.jkrush.dev", "custom_domain": true }],
+  "workers_dev": true,
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
