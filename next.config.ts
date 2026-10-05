@@ -9,7 +9,9 @@ const nextConfig: NextConfig = {
 };
 
 // Makes getCloudflareContext() work under `next dev` with wrangler-simulated
-// bindings (Images, Hyperdrive -> local Postgres) from wrangler.jsonc.
-initOpenNextCloudflareForDev();
+// bindings (Images, Hyperdrive -> local Postgres) from wrangler.jsonc. Remote
+// bindings stay off so local dev never touches (or bills) a real account; the
+// Workers AI binding is therefore absent locally and search degrades to FTS.
+initOpenNextCloudflareForDev({ remoteBindings: false });
 
 export default nextConfig;

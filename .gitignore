@@ -10,3 +10,8 @@ next-env.d.ts
 .open-next/
 .wrangler/
 .dev.vars
+# Per-project CLI logins (keeps them separate from other accounts' global logins)
+.cf-auth/
+.neon-auth/
+# Production Worker secrets, uploaded with `pnpm cf secret bulk .prod.vars`
+.prod.vars

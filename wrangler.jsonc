@@ -11,6 +11,8 @@
   "observability": { "enabled": true },
   // Thumbnails + image dimensions (replaces sharp). Free tier covers this app.
   "images": { "binding": "IMAGES" },
+  // Embeddings (@cf/baai/bge-m3). No token needed in the deployed Worker.
+  "ai": { "binding": "AI" },
   // Neon behind Hyperdrive: pooled, warm connections from the edge.
   // Create once:  wrangler hyperdrive create second-brain \
   //                 --connection-string="<neon DIRECT connection string>" \
@@ -29,11 +31,11 @@
     "crons": ["0 4 * * *", "15 * * * *"]
   },
   // Non-secret config. Secrets (APP_PASSWORD_HASH, SESSION_SECRET, API_TOKEN,
-  // CRON_SECRET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, CF_AI_TOKEN) go in
-  // `wrangler secret put <NAME>` for prod and `.dev.vars` for `wrangler dev`.
+  // CRON_SECRET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY) are uploaded from the
+  // gitignored .prod.vars with `pnpm cf secret bulk .prod.vars`; `.dev.vars`
+  // holds local values for `pnpm preview`.
   "vars": {
     "R2_ACCOUNT_ID": "REPLACE_WITH_ACCOUNT_ID",
-    "R2_BUCKET": "second-brain",
-    "CF_ACCOUNT_ID": "REPLACE_WITH_ACCOUNT_ID"
+    "R2_BUCKET": "second-brain"
   }
 }

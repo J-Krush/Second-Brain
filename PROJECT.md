@@ -37,7 +37,7 @@ The third promise is that it should be beautiful. Not a whiteboard tool, not a d
 - **Database:** Neon Postgres with `pgvector` and `pg_trgm` extensions, reached from the Worker through Hyperdrive (caching disabled).
 - **File storage:** Cloudflare R2 via the S3 API, presigned URLs for upload and read. Bucket is private.
 - **Image processing:** Cloudflare Images binding (`IMAGES`), run server-side after upload confirmation (dimensions + webp thumbnail variants).
-- **Embeddings:** Workers AI `@cf/baai/bge-m3` (1024 dims) via the REST API. Keep the embedding call behind a single module so the provider is swappable; the column dimension is fixed at 1024, so a provider change that alters dimensions requires a migration and re-embed (acceptable).
+- **Embeddings:** Workers AI `@cf/baai/bge-m3` (1024 dims) via the `AI` binding in the Worker (REST fallback for local dev when `CF_*` vars are set). Keep the embedding call behind a single module so the provider is swappable; the column dimension is fixed at 1024, so a provider change that alters dimensions requires a migration and re-embed (acceptable).
 - **Hosting:** Cloudflare Workers via `@opennextjs/cloudflare`. Nightly GC and hourly embed sweep run as Cron Triggers (`worker.ts`).
 
 ## Auth (single user, private)
@@ -234,14 +234,24 @@ R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
 R2_BUCKET=
 R2_ENDPOINT=             # optional S3 endpoint override (MinIO locally)
-CF_ACCOUNT_ID=           # Workers AI embeddings
-CF_AI_TOKEN=             # "Workers AI - Read" token; empty = FTS-only search
+CF_ACCOUNT_ID=           # optional, local dev only: Workers AI via REST
+CF_AI_TOKEN=             # optional, local dev only; empty = FTS-only search
 CRON_SECRET=             # bearer the Cron Trigger sends to /api/admin/*
 ```
 
 In production, non-secret values live in `wrangler.jsonc` `vars` and secrets
-are set with `wrangler secret put`; `.dev.vars` mirrors `.env.local` for
-`pnpm preview`.
+are uploaded from the gitignored `.prod.vars` with `pnpm cf secret bulk .prod.vars`;
+`.dev.vars` mirrors `.env.local` for `pnpm preview`. `pnpm cf` is wrangler with
+a project-local login (`.cf-auth/`), separate from any global wrangler login.
+
+## Deployment
+
+GitHub Actions (`.github/workflows/deploy.yml`): every PR runs typecheck +
+tests; every push to `main` runs them again, then `pnpm db:migrate` against
+Neon, then builds and deploys the Worker. Migrations run before the new code
+is live, so keep them backward compatible with the deployed version.
+Repo secrets: `CLOUDFLARE_API_TOKEN`, `DATABASE_URL` (Neon direct URL);
+repo variable: `CLOUDFLARE_ACCOUNT_ID`.
 
 ## Non-goals (v1)
 

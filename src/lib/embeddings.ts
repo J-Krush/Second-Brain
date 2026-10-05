@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cards } from "@/db/schema";
@@ -14,8 +15,24 @@ const MODEL = "@cf/baai/bge-m3";
 // bge-m3 accepts 8192 tokens; ~4 chars/token, cap generously.
 const MAX_CHARS = 24000;
 
+// Boundary type for the Workers AI binding (wrangler.jsonc `ai`).
+interface AiEnv {
+  AI?: { run(model: string, input: { text: string[] }): Promise<{ data: number[][] }> };
+}
+
+/**
+ * The binding in the deployed Worker. Under `next dev` remote bindings are off
+ * and wrangler hands back a stub that throws, so dev skips it and falls back
+ * to REST (CF_* vars) or, with neither, to FTS-only search.
+ */
+function aiBinding(): AiEnv["AI"] {
+  if (process.env.NODE_ENV === "development") return undefined;
+  const { env: cfEnv } = getCloudflareContext() as { env: AiEnv };
+  return cfEnv.AI;
+}
+
 export function embeddingsConfigured(): boolean {
-  return Boolean(env.CF_ACCOUNT_ID && env.CF_AI_TOKEN);
+  return Boolean(aiBinding() || (env.CF_ACCOUNT_ID && env.CF_AI_TOKEN));
 }
 
 export function contentHash(title: string | null, body: string | null): string {
@@ -36,6 +53,12 @@ interface WorkersAiEmbeddingResponse {
 }
 
 export async function embedText(text: string): Promise<number[]> {
+  const binding = aiBinding();
+  if (binding) {
+    const vector = (await binding.run(MODEL, { text: [text] })).data[0];
+    if (!vector) throw new Error("Workers AI embedding returned no vector");
+    return vector;
+  }
   if (!env.CF_ACCOUNT_ID || !env.CF_AI_TOKEN) {
     throw new Error("CF_ACCOUNT_ID / CF_AI_TOKEN not set");
   }

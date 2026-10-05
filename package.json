@@ -10,9 +10,10 @@
     "test": "vitest run",
     "db:migrate": "tsx scripts/migrate.ts",
     "hash-password": "tsx scripts/hash-password.ts",
-    "cf:types": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
+    "cf:types": "XDG_CONFIG_HOME=.cf-auth wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "preview": "opennextjs-cloudflare build && XDG_CONFIG_HOME=.cf-auth opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && XDG_CONFIG_HOME=.cf-auth opennextjs-cloudflare deploy",
+    "cf": "XDG_CONFIG_HOME=.cf-auth wrangler"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.20.8",
