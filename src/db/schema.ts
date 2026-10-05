@@ -21,10 +21,10 @@ import {
  * SQL). This file exists for typed queries; keep the two in sync.
  */
 
-// pgvector column, fixed at 1536 dims (OpenAI text-embedding-3-small).
+// pgvector column, fixed at 1024 dims (Workers AI @cf/baai/bge-m3).
 const vector = customType<{ data: number[]; driverData: string }>({
   dataType() {
-    return "vector(1536)";
+    return "vector(1024)";
   },
   toDriver(value: number[]): string {
     return `[${value.join(",")}]`;

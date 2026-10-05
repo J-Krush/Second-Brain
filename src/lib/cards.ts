@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { cardTags, cards, edges, placements, tags } from "@/db/schema";
 import { syncInlineRefs } from "./filerefs";
 
-// Columns safe to ship to the client: excludes the 1536-float `embedding` and
+// Columns safe to ship to the client: excludes the 1024-float `embedding` and
 // the internal generated `search` tsvector. Used for every read + returning().
 export const cardCols = {
   id: cards.id,

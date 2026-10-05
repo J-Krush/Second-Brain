@@ -1,15 +1,10 @@
-import { verify } from "@node-rs/argon2";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { env } from "./env";
+import { verifyPassword as verifyAgainstHash } from "./password";
 
-export async function verifyPassword(password: string): Promise<boolean> {
-  try {
-    return await verify(env.APP_PASSWORD_HASH, password);
-  } catch {
-    // Malformed hash env var, etc. Fail closed.
-    return false;
-  }
+export function verifyPassword(password: string): Promise<boolean> {
+  return verifyAgainstHash(env.APP_PASSWORD_HASH, password);
 }
 
 const RATE_WINDOW_MS = 60_000;
@@ -39,7 +34,7 @@ export function bearerTokenValid(header: string | null): boolean {
   const prefix = "Bearer ";
   if (!header.startsWith(prefix)) return false;
   const presented = header.slice(prefix.length);
-  // Accept the capture-client token or the Vercel cron secret.
+  // Accept the capture-client token or the cron-trigger secret.
   const accepted = [env.API_TOKEN, env.CRON_SECRET].filter(Boolean);
   return accepted.includes(presented);
 }

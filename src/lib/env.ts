@@ -37,8 +37,13 @@ export const env = {
   get R2_ENDPOINT() {
     return process.env.R2_ENDPOINT || undefined;
   },
-  get OPENAI_API_KEY() {
-    return process.env.OPENAI_API_KEY || undefined;
+  // Workers AI (embeddings) via REST so `next dev` and the Worker share one
+  // code path. Token needs the "Workers AI - Read" permission.
+  get CF_ACCOUNT_ID() {
+    return process.env.CF_ACCOUNT_ID || undefined;
+  },
+  get CF_AI_TOKEN() {
+    return process.env.CF_AI_TOKEN || undefined;
   },
   get CRON_SECRET() {
     return process.env.CRON_SECRET || undefined;

@@ -1,24 +1,21 @@
 import { createHash } from "node:crypto";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
-import OpenAI from "openai";
 import { db } from "@/db";
 import { cards } from "@/db/schema";
 import { env } from "./env";
 
 /**
  * Single module wrapping the embedding provider so it stays swappable. The
- * column dimension is fixed at 1536 (OpenAI text-embedding-3-small); a provider
+ * column dimension is fixed at 1024 (Workers AI @cf/baai/bge-m3); a provider
  * change that alters dimensions requires a migration + re-embed.
  */
-export const EMBEDDING_DIMS = 1536;
-const MODEL = "text-embedding-3-small";
-// text-embedding-3-small handles 8191 tokens; ~4 chars/token, cap generously.
+export const EMBEDDING_DIMS = 1024;
+const MODEL = "@cf/baai/bge-m3";
+// bge-m3 accepts 8192 tokens; ~4 chars/token, cap generously.
 const MAX_CHARS = 24000;
 
-let openai: OpenAI | undefined;
-
 export function embeddingsConfigured(): boolean {
-  return Boolean(env.OPENAI_API_KEY);
+  return Boolean(env.CF_ACCOUNT_ID && env.CF_AI_TOKEN);
 }
 
 export function contentHash(title: string | null, body: string | null): string {
@@ -31,11 +28,36 @@ function embedInput(title: string | null, body: string | null): string {
   return `${title ?? ""}\n\n${body ?? ""}`.trim().slice(0, MAX_CHARS);
 }
 
+// Response boundary for POST /accounts/{id}/ai/run/@cf/baai/bge-m3.
+interface WorkersAiEmbeddingResponse {
+  success: boolean;
+  errors?: { message: string }[];
+  result?: { data: number[][] };
+}
+
 export async function embedText(text: string): Promise<number[]> {
-  if (!env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not set");
-  openai ??= new OpenAI({ apiKey: env.OPENAI_API_KEY });
-  const res = await openai.embeddings.create({ model: MODEL, input: text });
-  return res.data[0]!.embedding;
+  if (!env.CF_ACCOUNT_ID || !env.CF_AI_TOKEN) {
+    throw new Error("CF_ACCOUNT_ID / CF_AI_TOKEN not set");
+  }
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/ai/run/${MODEL}`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.CF_AI_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ text: [text] }),
+    },
+  );
+  const data = (await res.json()) as WorkersAiEmbeddingResponse;
+  const vector = data.result?.data[0];
+  if (!res.ok || !data.success || !vector) {
+    throw new Error(
+      `Workers AI embedding failed: ${data.errors?.[0]?.message ?? res.status}`,
+    );
+  }
+  return vector;
 }
 
 function toVectorLiteral(vec: number[]): string {

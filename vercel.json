@@ -1,6 +1,0 @@
-{
-  "crons": [
-    { "path": "/api/admin/gc", "schedule": "0 4 * * *" },
-    { "path": "/api/admin/embed-sweep", "schedule": "15 * * * *" }
-  ]
-}

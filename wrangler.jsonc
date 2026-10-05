@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "second-brain",
+  "main": "./worker.ts",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true },
+  // Thumbnails + image dimensions (replaces sharp). Free tier covers this app.
+  "images": { "binding": "IMAGES" },
+  // Neon behind Hyperdrive: pooled, warm connections from the edge.
+  // Create once:  wrangler hyperdrive create second-brain \
+  //                 --connection-string="<neon DIRECT connection string>" \
+  //                 --caching-disabled
+  // Caching MUST stay disabled: Hyperdrive caches reads for 60s by default,
+  // which would hide a just-captured card from the next page load.
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "REPLACE_WITH_HYPERDRIVE_ID",
+      "localConnectionString": "postgres://postgres:postgres@localhost:55432/secondbrain"
+    }
+  ],
+  // Same schedules as the former Vercel crons; dispatched in worker.ts.
+  "triggers": {
+    "crons": ["0 4 * * *", "15 * * * *"]
+  },
+  // Non-secret config. Secrets (APP_PASSWORD_HASH, SESSION_SECRET, API_TOKEN,
+  // CRON_SECRET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, CF_AI_TOKEN) go in
+  // `wrangler secret put <NAME>` for prod and `.dev.vars` for `wrangler dev`.
+  "vars": {
+    "R2_ACCOUNT_ID": "REPLACE_WITH_ACCOUNT_ID",
+    "R2_BUCKET": "second-brain",
+    "CF_ACCOUNT_ID": "REPLACE_WITH_ACCOUNT_ID"
+  }
+}
