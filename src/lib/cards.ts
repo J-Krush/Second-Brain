@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cardTags, cards, edges, fileRefs, files, placements, tags } from "@/db/schema";
 import { syncInlineRefs } from "./filerefs";
-import { sourceOf } from "./source";
+import { sourceFacetLabel, sourceOf, type SourceFilter } from "./source";
 
 // Columns safe to ship to the client: excludes the 1024-float `embedding` and
 // the internal generated `search` tsvector. Used for every read + returning().
@@ -147,9 +147,16 @@ export interface ListParams {
   view: "inbox" | "library";
   type?: string;
   tagId?: number;
+  source?: SourceFilter;
   order?: "asc" | "desc"; // created_at; default desc (newest first)
   limit?: number;
   cursor?: string; // "<iso>|<uuid>"
+}
+
+function scopeFilters(view: ListParams["view"]) {
+  const filters = [isNull(cards.deletedAt)];
+  if (view === "inbox") filters.push(isNull(cards.triagedAt));
+  return filters;
 }
 
 export interface ListResult {
@@ -161,8 +168,13 @@ const DEFAULT_LIMIT = 50;
 
 export async function listCards(params: ListParams): Promise<ListResult> {
   const limit = Math.min(params.limit ?? DEFAULT_LIMIT, 200);
-  const filters = [isNull(cards.deletedAt)];
-  if (params.view === "inbox") filters.push(isNull(cards.triagedAt));
+  const filters = scopeFilters(params.view);
+  if (params.source) {
+    filters.push(sql`${cards.props} #>> '{source,via}' = ${params.source.via}`);
+    if (params.source.via === "web") {
+      filters.push(sql`${cards.props} #>> '{source,domain}' = ${params.source.domain}`);
+    }
+  }
   if (params.type && CARD_TYPES[params.type]) {
     filters.push(eq(cards.type, params.type));
   }
@@ -208,6 +220,54 @@ export async function listCards(params: ListParams): Promise<ListResult> {
     files: fileMap.get(c.id) ?? [],
   }));
   return { items, nextCursor };
+}
+
+export interface Facets {
+  kinds: { type: string; count: number }[];
+  sources: { key: string; label: string; via: SourceFilter["via"]; domain: string | null; count: number }[];
+}
+
+/** Counts behind the filter menus, scoped to inbox or library only. */
+export async function listFacets(view: ListParams["view"]): Promise<Facets> {
+  const where = and(...scopeFilters(view));
+  const [kindRows, sourceRows] = await Promise.all([
+    db
+      .select({ type: cards.type, count: sql<number>`count(*)::int` })
+      .from(cards)
+      .where(where)
+      .groupBy(cards.type)
+      .orderBy(desc(sql`count(*)`)),
+    db
+      .select({
+        via: sql<string | null>`${cards.props} #>> '{source,via}'`,
+        domain: sql<string | null>`CASE WHEN ${cards.props} #>> '{source,via}' = 'web' THEN ${cards.props} #>> '{source,domain}' END`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(cards)
+      .where(where)
+      .groupBy(sql`1`, sql`2`)
+      .orderBy(desc(sql`count(*)`)),
+  ]);
+  const sources: Facets["sources"] = [];
+  for (const row of sourceRows) {
+    const filter: SourceFilter | null =
+      row.via === "web"
+        ? row.domain
+          ? { via: "web", domain: row.domain }
+          : null
+        : row.via === "typed" || row.via === "share" || row.via === "upload" || row.via === "book"
+          ? { via: row.via }
+          : null;
+    if (!filter) continue;
+    sources.push({
+      key: filter.via === "web" ? `web:${filter.domain}` : filter.via,
+      label: sourceFacetLabel(filter),
+      via: filter.via,
+      domain: filter.via === "web" ? filter.domain : null,
+      count: row.count,
+    });
+  }
+  return { kinds: kindRows.filter((k) => CARD_TYPES[k.type]), sources };
 }
 
 export interface CardDetail {

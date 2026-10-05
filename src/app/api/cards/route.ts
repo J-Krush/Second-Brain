@@ -4,6 +4,7 @@ import { captureLink } from "@/lib/og";
 import { embedCard } from "@/lib/embeddings";
 import { createCard, listCards } from "@/lib/cards";
 import { authorize, badRequest, unauthorized } from "@/lib/route-helpers";
+import { parseSourceKey } from "@/lib/source";
 
 export const runtime = "nodejs";
 
@@ -38,10 +39,12 @@ export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
   const view = sp.get("view") === "library" ? "library" : "inbox";
   const tagRaw = sp.get("tag");
+  const sourceRaw = sp.get("source");
   const result = await listCards({
     view,
     type: sp.get("type") ?? undefined,
     tagId: tagRaw ? Number(tagRaw) : undefined,
+    source: sourceRaw ? (parseSourceKey(sourceRaw) ?? undefined) : undefined,
     order: sp.get("order") === "asc" ? "asc" : "desc",
     cursor: sp.get("cursor") ?? undefined,
   });

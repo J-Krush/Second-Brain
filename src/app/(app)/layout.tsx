@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { CaptureModal } from "@/components/CaptureModal";
+import { CaptureDialog } from "@/components/capture/CaptureDialog";
 import { LogoutButton } from "@/components/LogoutButton";
 import { ScopeNav } from "@/components/nav/ScopeNav";
 import { GlobalSearch } from "@/components/search/GlobalSearch";
@@ -35,7 +35,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </header>
       {children}
-      <CaptureModal />
+      <CaptureDialog />
       <ServiceWorker />
       {shouldRoll(session) && <SessionRefresh />}
     </div>

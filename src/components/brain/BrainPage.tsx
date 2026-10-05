@@ -7,10 +7,11 @@ import { CardModal } from "@/components/card/CardModal";
 import { CARD_STYLE } from "@/components/card-style";
 import { onCardChanged } from "@/lib/card-events";
 import { replaceParams } from "@/lib/card-url";
-import { Composer } from "./Composer";
+import type { Facets } from "@/lib/cards";
+import { parseSourceKey } from "@/lib/source";
 import { Desk } from "./Desk";
 import type { BrainCard, Scope, View } from "./item";
-import { useToast } from "./parts";
+import { Kbd, useToast } from "./parts";
 import { Shell, type TagOption } from "./Shell";
 import { Timeline } from "./Timeline";
 
@@ -30,6 +31,8 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
   const view: View = params.get("view") === "desk" ? "desk" : "timeline";
   const rawType = params.get("type");
   const type = rawType && Object.hasOwn(CARD_STYLE, rawType) ? rawType : null;
+  const rawSource = params.get("source");
+  const source = rawSource && parseSourceKey(rawSource) ? rawSource : null;
   const rawTag = Number(params.get("tag"));
   const tagId = tags.some((t) => t.id === rawTag) ? rawTag : null;
 
@@ -38,13 +41,14 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
   const [failed, setFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reload, setReload] = useState(0);
-  const [types, setTypes] = useState<string[]>([]);
+  const [facets, setFacets] = useState<Facets | null>(null);
   const request = useRef(0);
   const bar = useRef<HTMLDivElement>(null);
   const [barHeight, setBarHeight] = useState(0);
 
   const query = new URLSearchParams({ view: scope });
   if (type) query.set("type", type);
+  if (source) query.set("source", source);
   if (tagId !== null) query.set("tag", String(tagId));
   const queryKey = query.toString();
 
@@ -60,9 +64,18 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
   }, []);
 
   useEffect(() => {
+    const ctrl = new AbortController();
+    fetch(`/api/cards/facets?view=${scope}`, { signal: ctrl.signal })
+      .then((res) => (res.ok ? (res.json() as Promise<Facets>) : null))
+      .then((data) => {
+        if (data) setFacets(data);
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [scope, reload]);
+
+  useEffect(() => {
     const id = ++request.current;
-    const q = new URLSearchParams(queryKey);
-    const unfiltered = !q.has("type") && !q.has("tag");
     fetch(`/api/cards?${queryKey}`)
       .then((res) => {
         if (!res.ok) throw new Error(String(res.status));
@@ -72,7 +85,6 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
         if (id !== request.current) return;
         setPage(data);
         setFailed(false);
-        if (unfiltered) setTypes(Object.keys(CARD_STYLE).filter((t) => data.items.some((c) => c.type === t)));
       })
       .catch(() => {
         if (id === request.current) setFailed(true);
@@ -96,21 +108,14 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
     }
   }
 
-  const shownTypes = type && !types.includes(type) ? [...types, type] : types;
-  const filtered = type !== null || tagId !== null;
+  const filtered = type !== null || source !== null || tagId !== null;
   const items = page?.items ?? [];
 
   return (
     <div style={{ "--sb-bar": `${barHeight}px` } as React.CSSProperties}>
-      <div className="mx-auto max-w-[96rem] px-6 pt-6 lg:px-10">
-        <div className="mx-auto max-w-[46rem]">
-          <Composer onToast={toast.show} />
-        </div>
-      </div>
-
       <div ref={bar} className="sticky top-14 z-20 border-b border-line bg-base/85 backdrop-blur">
         <div className="mx-auto max-w-[96rem] px-6 lg:px-10">
-          <Shell view={view} type={type} tagId={tagId} types={shownTypes} tags={tags} />
+          <Shell view={view} type={type} source={source} tagId={tagId} facets={facets} tags={tags} />
         </div>
       </div>
 
@@ -126,7 +131,7 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
               hint={
                 <button
                   type="button"
-                  onClick={() => replaceParams({ type: null, tag: null })}
+                  onClick={() => replaceParams({ type: null, source: null, tag: null })}
                   className="text-accent hover:underline"
                 >
                   clear filters
@@ -134,9 +139,9 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
               }
             />
           ) : scope === "inbox" ? (
-            <Empty title="inbox zero" hint="everything's filed. capture something above, or browse the library." />
+            <Empty title="inbox zero" hint={<>everything's filed. <Kbd>⌘</Kbd> <Kbd>J</Kbd> to capture, or browse the library.</>} />
           ) : (
-            <Empty title="nothing here yet" hint="type, paste a link, or drop a file above." />
+            <Empty title="nothing here yet" hint={<><Kbd>⌘</Kbd> <Kbd>J</Kbd> to type, paste a link, or attach a file.</>} />
           )
         ) : (
           <div key={`${scope}-${view}`}>
