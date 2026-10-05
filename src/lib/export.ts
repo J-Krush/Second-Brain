@@ -18,6 +18,7 @@ function frontmatter(
     url: string | null;
     createdAt: Date;
     updatedAt: Date;
+    triagedAt: Date | null;
   },
   cardTagNames: string[],
 ): string {
@@ -29,6 +30,7 @@ function frontmatter(
     `created: ${card.createdAt.toISOString()}`,
     `updated: ${card.updatedAt.toISOString()}`,
   ];
+  if (card.triagedAt) lines.push(`triaged: ${card.triagedAt.toISOString()}`);
   if (card.url) lines.push(`url: ${yamlString(card.url)}`);
   if (cardTagNames.length) lines.push(`tags: [${cardTagNames.join(", ")}]`);
   lines.push("---", "");

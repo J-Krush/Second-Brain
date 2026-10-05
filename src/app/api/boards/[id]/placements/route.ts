@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { addPlacement } from "@/lib/boards";
+import { markTriaged } from "@/lib/cards";
 import { authorize, badRequest, unauthorized } from "@/lib/route-helpers";
 
 export const runtime = "nodejs";
@@ -23,5 +24,6 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   if (!parsed.success) return badRequest("cardId, x, y required");
   const { cardId, ...rest } = parsed.data;
   const placement = await addPlacement(id, cardId, rest);
+  await markTriaged(cardId);
   return NextResponse.json({ placement }, { status: 201 });
 }

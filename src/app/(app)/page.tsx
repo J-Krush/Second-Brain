@@ -1,18 +1,18 @@
-import { CardBrowser } from "@/components/CardBrowser";
+import { Suspense } from "react";
+import { BrainPage } from "@/components/brain/BrainPage";
 import { listTags } from "@/lib/tags";
 import { requireSession } from "@/lib/page-auth";
 
 export const dynamic = "force-dynamic";
 
-export default async function InboxPage() {
+export default async function HomePage() {
   await requireSession();
   const tags = await listTags();
   return (
-    <main className="mx-auto max-w-6xl px-6 py-8">
-      <h1 className="mb-5 font-display text-3xl font-bold tracking-tight text-ink">
-        Inbox
-      </h1>
-      <CardBrowser tags={tags} />
+    <main>
+      <Suspense fallback={null}>
+        <BrainPage tags={tags} />
+      </Suspense>
     </main>
   );
 }

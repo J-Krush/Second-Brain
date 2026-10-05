@@ -9,13 +9,14 @@ const edgeSchema = z.object({
   fromCard: z.string().uuid(),
   toCard: z.string().uuid(),
   label: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
 });
 
 export async function POST(request: NextRequest) {
   if (!(await authorize(request))) return unauthorized();
   const parsed = edgeSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return badRequest("fromCard and toCard required");
-  await upsertEdge(parsed.data.fromCard, parsed.data.toCard, parsed.data.label);
+  await upsertEdge(parsed.data.fromCard, parsed.data.toCard, parsed.data.label, parsed.data.description);
   return NextResponse.json({ ok: true });
 }
 

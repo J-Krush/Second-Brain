@@ -1,0 +1,83 @@
+/* Motion + small effects for the Timeline / Desk views. Colors come from the
+   Tailwind @theme tokens in globals.css. */
+
+@keyframes sb-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sb-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sb-sheet {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+@keyframes sb-toast {
+  from {
+    transform: translate(-50%, 12px);
+    opacity: 0;
+  }
+}
+
+@keyframes sb-ants {
+  to {
+    background-position: 32px 0, -32px 100%, 0 -32px, 100% 32px;
+  }
+}
+
+.sb-rise {
+  animation: sb-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 30ms);
+}
+
+.sb-fade {
+  animation: sb-fade 0.25s ease-out both;
+}
+
+.sb-sheet {
+  animation: sb-sheet 0.3s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.sb-toast {
+  animation: sb-toast 0.25s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Marching-ants drop target in the signal green. */
+.sb-ants {
+  background:
+    linear-gradient(90deg, var(--color-accent) 50%, transparent 0) repeat-x top / 16px 2px,
+    linear-gradient(90deg, var(--color-accent) 50%, transparent 0) repeat-x bottom / 16px 2px,
+    linear-gradient(0deg, var(--color-accent) 50%, transparent 0) repeat-y left / 2px 16px,
+    linear-gradient(0deg, var(--color-accent) 50%, transparent 0) repeat-y right / 2px 16px;
+  animation: sb-ants 1.2s linear infinite;
+}
+
+.sb-scroll {
+  scrollbar-width: none;
+}
+.sb-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-rise,
+  .sb-fade,
+  .sb-sheet,
+  .sb-toast,
+  .sb-ants {
+    animation: none;
+  }
+}

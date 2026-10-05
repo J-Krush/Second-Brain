@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { closeCard } from "@/lib/card-url";
+import { emitCardChanged } from "@/lib/card-events";
 import { useRef, useState } from "react";
 import type { CardDetail } from "@/lib/cards";
 import { uploadFile } from "@/lib/upload-client";
@@ -8,8 +9,13 @@ import { CARD_STYLE } from "./card-style";
 
 const TYPES = Object.keys(CARD_STYLE);
 
-export function CardEditor({ detail }: { detail: CardDetail }) {
-  const router = useRouter();
+export function CardEditor({
+  detail,
+  onSaved,
+}: {
+  detail: CardDetail;
+  onSaved?: () => void;
+}) {
   const { card } = detail;
   const [type, setType] = useState(card.type);
   const [title, setTitle] = useState(card.title ?? "");
@@ -67,15 +73,17 @@ export function CardEditor({ detail }: { detail: CardDetail }) {
     setBusy(false);
     if (res.ok) {
       setSavedAt(new Date().toLocaleTimeString());
-      router.refresh();
+      emitCardChanged(card.id);
+      onSaved?.();
     }
   }
 
   async function remove() {
     if (!confirm("Move this card to trash?")) return;
-    await fetch(`/api/cards/${card.id}`, { method: "DELETE" });
-    router.push("/");
-    router.refresh();
+    const res = await fetch(`/api/cards/${card.id}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) return;
+    emitCardChanged(card.id);
+    closeCard();
   }
 
   return (

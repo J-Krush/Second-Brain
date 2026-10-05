@@ -99,7 +99,9 @@ export function CaptureModal() {
           target.isContentEditable);
       if (e.key === "c" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
-        openModal({});
+        const composer = document.querySelector<HTMLTextAreaElement>("[data-composer]");
+        if (composer) composer.focus();
+        else openModal({});
       }
     }
     window.addEventListener("keydown", onKey);
