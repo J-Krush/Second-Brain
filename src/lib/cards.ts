@@ -1,7 +1,8 @@
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { cardTags, cards, edges, placements, tags } from "@/db/schema";
+import { cardTags, cards, edges, fileRefs, files, placements, tags } from "@/db/schema";
 import { syncInlineRefs } from "./filerefs";
+import { sourceOf } from "./source";
 
 // Columns safe to ship to the client: excludes the 1024-float `embedding` and
 // the internal generated `search` tsvector. Used for every read + returning().
@@ -17,6 +18,7 @@ export const cardCols = {
   deletedAt: cards.deletedAt,
   embeddingHash: cards.embeddingHash,
   embeddedAt: cards.embeddedAt,
+  triagedAt: cards.triagedAt,
 } as const;
 
 export type CardView = {
@@ -31,6 +33,7 @@ export type CardView = {
   deletedAt: Date | null;
   embeddingHash: string | null;
   embeddedAt: Date | null;
+  triagedAt: Date | null;
 };
 export const CARD_TYPES: Record<string, true> = {
   thought: true,
@@ -60,11 +63,84 @@ export async function createCard(input: CreateCardInput): Promise<CardView> {
       title: input.title ?? null,
       body: input.body ?? null,
       url: input.url ?? null,
-      props: input.props ?? {},
+      props: withSource(input.props ?? {}, input.url ?? null),
     })
     .returning(cardCols);
   if (row!.body) await syncInlineRefs(row!.id, row!.body);
   return row!;
+}
+
+// Every card records provenance; callers that know better (share, upload,
+// book quote) pass props.source explicitly.
+function withSource(props: Record<string, unknown>, url: string | null): Record<string, unknown> {
+  if (props.source !== undefined) return props;
+  return { ...props, source: sourceOf({ props: {}, url }) };
+}
+
+export interface FileRef {
+  id: string;
+  role: string;
+  mime: string;
+  bytes: number;
+  width: number | null;
+  height: number | null;
+}
+
+export type CardTag = { id: number; name: string; color: string | null };
+
+export type ListCard = CardView & { tags: CardTag[]; files: FileRef[] };
+
+export interface RelatedCard {
+  id: string;
+  type: string;
+  title: string | null;
+  body: string | null;
+  label: string | null;
+  description: string | null;
+}
+
+const fileRefCols = {
+  cardId: fileRefs.cardId,
+  id: files.id,
+  role: fileRefs.role,
+  mime: files.mime,
+  bytes: files.bytes,
+  width: files.width,
+  height: files.height,
+} as const;
+
+async function filesFor(cardIds: string[]): Promise<Map<string, FileRef[]>> {
+  const out = new Map<string, FileRef[]>();
+  if (cardIds.length === 0) return out;
+  const rows = await db
+    .select(fileRefCols)
+    .from(fileRefs)
+    .innerJoin(files, eq(files.id, fileRefs.fileId))
+    .where(and(inArray(fileRefs.cardId, cardIds), eq(files.status, "active")))
+    .orderBy(asc(files.createdAt));
+  for (const { cardId, ...f } of rows) {
+    const list = out.get(cardId);
+    if (list) list.push(f);
+    else out.set(cardId, [f]);
+  }
+  return out;
+}
+
+async function tagsFor(cardIds: string[]): Promise<Map<string, CardTag[]>> {
+  const out = new Map<string, CardTag[]>();
+  if (cardIds.length === 0) return out;
+  const rows = await db
+    .select({ cardId: cardTags.cardId, id: tags.id, name: tags.name, color: tags.color })
+    .from(cardTags)
+    .innerJoin(tags, eq(tags.id, cardTags.tagId))
+    .where(inArray(cardTags.cardId, cardIds))
+    .orderBy(asc(tags.name));
+  for (const { cardId, ...t } of rows) {
+    const list = out.get(cardId);
+    if (list) list.push(t);
+    else out.set(cardId, [t]);
+  }
+  return out;
 }
 
 export interface ListParams {
@@ -77,7 +153,7 @@ export interface ListParams {
 }
 
 export interface ListResult {
-  items: CardView[];
+  items: ListCard[];
   nextCursor: string | null;
 }
 
@@ -86,6 +162,7 @@ const DEFAULT_LIMIT = 50;
 export async function listCards(params: ListParams): Promise<ListResult> {
   const limit = Math.min(params.limit ?? DEFAULT_LIMIT, 200);
   const filters = [isNull(cards.deletedAt)];
+  if (params.view === "inbox") filters.push(isNull(cards.triagedAt));
   if (params.type && CARD_TYPES[params.type]) {
     filters.push(eq(cards.type, params.type));
   }
@@ -119,19 +196,27 @@ export async function listCards(params: ListParams): Promise<ListResult> {
     .limit(limit + 1);
 
   const hasMore = rows.length > limit;
-  const items = hasMore ? rows.slice(0, limit) : rows;
-  const last = items[items.length - 1];
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
   const nextCursor =
     hasMore && last ? `${last.createdAt.toISOString()}|${last.id}` : null;
+  const ids = page.map((c) => c.id);
+  const [tagMap, fileMap] = await Promise.all([tagsFor(ids), filesFor(ids)]);
+  const items = page.map((c) => ({
+    ...c,
+    tags: tagMap.get(c.id) ?? [],
+    files: fileMap.get(c.id) ?? [],
+  }));
   return { items, nextCursor };
 }
 
 export interface CardDetail {
   card: CardView;
-  tags: { id: number; name: string; color: string | null }[];
+  tags: CardTag[];
   boards: { id: string; title: string | null }[]; // boards this card appears on
-  links: { id: string; type: string; title: string | null; body: string | null; label: string | null }[]; // outgoing
-  backlinks: { id: string; type: string; title: string | null; body: string | null; label: string | null }[];
+  files: FileRef[];
+  links: RelatedCard[]; // outgoing
+  backlinks: RelatedCard[];
 }
 
 export async function getCardDetail(id: string): Promise<CardDetail | null> {
@@ -152,22 +237,25 @@ export async function getCardDetail(id: string): Promise<CardDetail | null> {
 
   // Outgoing links: cards this one points AT.
   const linkRows = await db
-    .select({ id: cards.id, type: cards.type, title: cards.title, body: cards.body, label: edges.label })
+    .select({ id: cards.id, type: cards.type, title: cards.title, body: cards.body, label: edges.label, description: edges.description })
     .from(edges)
     .innerJoin(cards, eq(cards.id, edges.toCard))
     .where(and(eq(edges.fromCard, id), isNull(cards.deletedAt)));
 
   // Backlinks: cards that link TO this one.
   const backlinkRows = await db
-    .select({ id: cards.id, type: cards.type, title: cards.title, body: cards.body, label: edges.label })
+    .select({ id: cards.id, type: cards.type, title: cards.title, body: cards.body, label: edges.label, description: edges.description })
     .from(edges)
     .innerJoin(cards, eq(cards.id, edges.fromCard))
     .where(and(eq(edges.toCard, id), isNull(cards.deletedAt)));
+
+  const fileMap = await filesFor([id]);
 
   return {
     card,
     tags: cardTagRows,
     boards: boardRows,
+    files: fileMap.get(id) ?? [],
     links: linkRows,
     backlinks: backlinkRows,
   };
@@ -179,6 +267,7 @@ export interface UpdateCardInput {
   body?: string | null;
   url?: string | null;
   props?: Record<string, unknown>;
+  triaged?: boolean;
 }
 
 export async function updateCard(
@@ -191,6 +280,7 @@ export async function updateCard(
   if (input.body !== undefined) patch.body = input.body;
   if (input.url !== undefined) patch.url = input.url;
   if (input.props !== undefined) patch.props = input.props;
+  if (input.triaged !== undefined) patch.triagedAt = input.triaged ? new Date() : null;
 
   const [row] = await db
     .update(cards)
@@ -199,6 +289,14 @@ export async function updateCard(
     .returning(cardCols);
   if (row && input.body !== undefined) await syncInlineRefs(row.id, input.body);
   return row ?? null;
+}
+
+/** Filing a card (tag, board placement) takes it out of the inbox; idempotent. */
+export async function markTriaged(id: string): Promise<void> {
+  await db
+    .update(cards)
+    .set({ triagedAt: sql`now()` })
+    .where(and(eq(cards.id, id), isNull(cards.triagedAt)));
 }
 
 export async function softDeleteCard(id: string): Promise<boolean> {

@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type Ref } from "react";
+import { emitCardChanged } from "@/lib/card-events";
 
 interface TagRef {
   id: number;
@@ -17,12 +17,13 @@ export function TagEditor({
   cardId,
   attached,
   allTags,
+  inputRef,
 }: {
   cardId: string;
   attached: TagRef[];
   allTags: TagRef[];
+  inputRef?: Ref<HTMLInputElement>;
 }) {
-  const router = useRouter();
   const [tags, setTags] = useState<TagRef[]>(attached);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -45,7 +46,7 @@ export function TagEditor({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ tagId: tag.id, action: "attach" }),
     });
-    router.refresh();
+    emitCardChanged(cardId);
   }
 
   async function detach(tag: TagRef) {
@@ -55,7 +56,7 @@ export function TagEditor({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ tagId: tag.id, action: "detach" }),
     });
-    router.refresh();
+    emitCardChanged(cardId);
   }
 
   async function createAndAttach() {
@@ -95,6 +96,7 @@ export function TagEditor({
       ))}
       <div className="relative">
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {

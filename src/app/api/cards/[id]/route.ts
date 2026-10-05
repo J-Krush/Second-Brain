@@ -23,6 +23,7 @@ const patchSchema = z.object({
   body: z.string().nullable().optional(),
   url: z.string().url().nullable().optional(),
   props: z.record(z.string(), z.unknown()).optional(),
+  triaged: z.boolean().optional(),
 });
 
 export async function PATCH(request: NextRequest, { params }: Ctx) {

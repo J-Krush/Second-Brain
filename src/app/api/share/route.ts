@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
     title,
     body,
     url: sharedUrl,
+    props: { source: { via: "share" } },
   });
 
   if (card.type === "link" && card.url) after(() => captureLink(card.id, card.url!));

@@ -16,7 +16,8 @@ import {
 } from "drizzle-orm/pg-core";
 
 /**
- * Drizzle schema mirrors src/db/0000_init.sql, which is the DDL source of
+ * Drizzle schema mirrors src/db/0000_init.sql plus later migrations
+ * (src/db/0001_*.sql, 0002_*.sql, ...), which are the DDL source of
  * truth (generated columns, extensions, and HNSW indexes are clearer in raw
  * SQL). This file exists for typed queries; keep the two in sync.
  */
@@ -61,6 +62,7 @@ export const cards = pgTable(
     embedding: vector("embedding"),
     embeddingHash: text("embedding_hash"),
     embeddedAt: timestamp("embedded_at", { withTimezone: true }),
+    triagedAt: timestamp("triaged_at", { withTimezone: true }),
   },
   (t) => [
     index("cards_search_idx").using("gin", t.search),
@@ -71,6 +73,9 @@ export const cards = pgTable(
     index("cards_inbox_idx")
       .on(t.createdAt.desc())
       .where(sql`${t.deletedAt} IS NULL`),
+    index("cards_untriaged_idx")
+      .on(t.createdAt.desc())
+      .where(sql`${t.deletedAt} IS NULL AND ${t.triagedAt} IS NULL`),
     index("cards_embedding_idx").using("hnsw", t.embedding.op("vector_cosine_ops")),
   ],
 );
@@ -85,6 +90,7 @@ export const edges = pgTable(
       .notNull()
       .references(() => cards.id, { onDelete: "cascade" }),
     label: text("label"),
+    description: text("description"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

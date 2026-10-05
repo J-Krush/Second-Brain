@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { markTriaged } from "@/lib/cards";
 import { attachTag, detachTag } from "@/lib/tags";
 import { authorize, badRequest, unauthorized } from "@/lib/route-helpers";
 
@@ -19,6 +20,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   if (!parsed.success) return badRequest("tagId and action required");
   if (parsed.data.action === "attach") {
     await attachTag(id, parsed.data.tagId);
+    await markTriaged(id);
   } else {
     await detachTag(id, parsed.data.tagId);
   }
