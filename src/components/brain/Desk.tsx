@@ -4,40 +4,19 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { styleFor } from "@/components/card-style";
 import { openCard } from "@/lib/card-url";
-import { sourceLabel, sourceOf, type Source } from "@/lib/source";
+import { sourceOf } from "@/lib/source";
 import { captureFiles, postCard } from "./Composer";
 import { displayBody, headline, isQuote, type BrainCard } from "./item";
 import { PdfStack, Provenance, SiteMark, Waveform, fileUrl, heroOf, isTyping, stagger } from "./parts";
 
-const SHELF_ICON: Record<Source["via"], string> = {
-  typed: "¶",
-  web: "↗",
-  share: "⇪",
-  upload: "⎘",
-  book: "❡",
-};
-
 /**
- * A light table: each object at its natural shape inside a faint frame.
- * Sources are a shelf you pull from; the whole page is a drop target and a
- * paste target for links.
+ * A light table: each object at its natural shape inside a faint frame. The
+ * whole page is a drop target and a paste target for links.
  */
 export function Desk({ items, onToast }: { items: BrainCard[]; onToast: (msg: string) => void }) {
   const router = useRouter();
-  const [shelf, setShelf] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const depth = useRef(0);
-
-  const facets = new Map<string, { source: Source; count: number }>();
-  for (const card of items) {
-    const source = sourceOf(card);
-    const key = sourceLabel(source);
-    const f = facets.get(key);
-    if (f) f.count++;
-    else facets.set(key, { source, count: 1 });
-  }
-  const active = shelf !== null && facets.has(shelf) ? shelf : null;
-  const shown = active ? items.filter((c) => sourceLabel(sourceOf(c)) === active) : items;
 
   useEffect(() => {
     const hasFiles = (e: DragEvent) => e.dataTransfer?.types.includes("Files") ?? false;
@@ -108,37 +87,8 @@ export function Desk({ items, onToast }: { items: BrainCard[]; onToast: (msg: st
         drop anything on the page · paste a link · click to inspect
       </p>
 
-      {facets.size > 1 && (
-        <div className="sb-scroll -mx-6 mt-4 flex snap-x scroll-px-6 gap-2 overflow-x-auto px-6 pb-2 lg:-mx-10 lg:scroll-px-10 lg:px-10">
-          <ShelfItem active={active === null} onClick={() => setShelf(null)} count={items.length} kindLabel="all">
-            <span className="grid size-8 place-items-center rounded-md bg-surface-2 font-mono text-sm text-ink">∗</span>
-            <span className="truncate">All sources</span>
-          </ShelfItem>
-          {[...facets.entries()]
-            .sort((a, b) => b[1].count - a[1].count)
-            .map(([key, { source, count }]) => (
-              <ShelfItem
-                key={key}
-                active={active === key}
-                onClick={() => setShelf(active === key ? null : key)}
-                count={count}
-                kindLabel={source.via}
-              >
-                {source.via === "web" ? (
-                  <SiteMark label={source.domain} className="size-8 text-sm" />
-                ) : (
-                  <span className="grid size-8 place-items-center rounded-md bg-surface-2 font-mono text-[11px] text-ink-dim">
-                    {SHELF_ICON[source.via]}
-                  </span>
-                )}
-                <span className="truncate">{key}</span>
-              </ShelfItem>
-            ))}
-        </div>
-      )}
-
       <div className="mt-6 columns-1 gap-6 sm:columns-2 lg:columns-3 2xl:columns-4">
-        {shown.map((card, i) => {
+        {items.map((card, i) => {
           const style = styleFor(card.type);
           return (
             <button
@@ -184,37 +134,6 @@ export function Desk({ items, onToast }: { items: BrainCard[]; onToast: (msg: st
         </div>
       )}
     </div>
-  );
-}
-
-function ShelfItem({
-  active,
-  onClick,
-  count,
-  kindLabel,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  count: number;
-  kindLabel: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`relative flex w-48 flex-none snap-start items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-[13px] transition-colors ${
-        active ? "border-accent/60 bg-accent/5 text-ink" : "border-line text-ink-dim hover:border-line-2 hover:text-ink"
-      }`}
-    >
-      {children}
-      <span className="ml-auto flex flex-col items-end font-mono leading-tight">
-        <span className="text-[13px] tabular-nums text-ink">{count}</span>
-        <span className="text-[9px] uppercase tracking-widest text-ink-faint">{kindLabel}</span>
-      </span>
-    </button>
   );
 }
 

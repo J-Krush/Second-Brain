@@ -1,13 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import { CARD_STYLE } from "@/components/card-style";
 import { emitCardChanged } from "@/lib/card-events";
+import type { CreatedCard } from "@/lib/capture-bus";
 import type { Source } from "@/lib/source";
 import { uploadFile } from "@/lib/upload-client";
+import { FacetMenu, type FacetOption } from "./FacetMenu";
 import { fmtBytes } from "./item";
 import { Kbd, SiteMark } from "./parts";
 
 const LEADING_URL_RE = /^(https?:\/\/\S+)\s*/;
+
+const KIND_OPTIONS: FacetOption[] = Object.entries(CARD_STYLE).map(([key, s]) => ({
+  key,
+  label: s.label.toLowerCase(),
+  glyph: <span className={s.text}>{s.glyph}</span>,
+}));
 
 export interface Draft {
   type: string;
@@ -39,9 +48,10 @@ interface QuoteFields {
  * 4. Attachments append `![name](file:<id>)` to the body. With no text at all,
  *    `props.source = {via:"upload", filename}` of the first file, a single file
  *    names the card, and an all-non-image upload is a `document`.
+ * 5. An explicit `kind` (the picker) wins over every inferred type.
  * Returns null when there is nothing to capture.
  */
-export function buildDraft(text: string, files: Uploaded[], quote: QuoteFields | null): Draft | null {
+export function buildDraft(text: string, files: Uploaded[], quote: QuoteFields | null, kind: string | null = null): Draft | null {
   let rest = text.trim();
   let title: string | null = null;
   const firstLine = rest.split("\n", 1)[0]!;
@@ -80,20 +90,21 @@ export function buildDraft(text: string, files: Uploaded[], quote: QuoteFields |
     if (files.length === 1) title = files[0]!.name;
     if (files.every((f) => !f.mime.startsWith("image/"))) type = "document";
   }
+  if (kind) type = kind;
   return { type, title, body, url, props };
 }
 
-/** POST a draft; returns the new card id and broadcasts the change. */
-export async function postCard(draft: Draft): Promise<string> {
+/** POST a draft; returns the new card and broadcasts the change. */
+export async function postCard(draft: Draft): Promise<CreatedCard> {
   const res = await fetch("/api/cards", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(draft),
   });
   if (res.status !== 201) throw new Error(`capture failed (${res.status})`);
-  const { card } = (await res.json()) as { card: { id: string } };
+  const { card } = (await res.json()) as { card: CreatedCard };
   emitCardChanged(card.id);
-  return card.id;
+  return card;
 }
 
 /** Drop/paste path shared with the Desk: upload every file, then one card. */
@@ -115,14 +126,21 @@ interface Attachment {
 }
 
 /**
- * Sticky capture box: type, paste a link, attach or drop files. ⌘↵ captures
- * into the inbox. The textarea carries `data-composer` so the global `c`
- * hotkey can focus it.
+ * The capture form inside the ⌘J dialog: type, paste a link, attach or drop
+ * files, or pick a kind explicitly (boards, projects, mantras). ⌘↵ captures;
+ * the created card is handed to `onCaptured`, which decides what happens next.
  */
-export function Composer({ onToast }: { onToast: (msg: string) => void }) {
+export function Composer({
+  onToast,
+  onCaptured,
+}: {
+  onToast: (msg: string) => void;
+  onCaptured: (card: CreatedCard) => void;
+}) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Attachment[]>([]);
   const [quote, setQuote] = useState<QuoteFields | null>(null);
+  const [kind, setKind] = useState<string | null>(null);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -130,7 +148,10 @@ export function Composer({ onToast }: { onToast: (msg: string) => void }) {
   const uploading = files.some((f) => !f.fileId && !f.failed);
   const preview = buildDraft(text, [], null);
   const host = preview?.url ? new URL(preview.url).hostname.replace(/^www\./, "") : null;
-  const ready = !busy && !uploading && buildDraft(text, uploaded, quote) !== null;
+  const draft = buildDraft(text, uploaded, quote, kind);
+  const ready = !busy && !uploading && draft !== null;
+  // What the picker shows when nothing is forced: the inferred kind.
+  const shownKind = kind ?? draft?.type ?? preview?.type ?? "thought";
 
   function addFiles(list: FileList | File[] | null) {
     const picked = Array.from(list ?? []);
@@ -150,15 +171,15 @@ export function Composer({ onToast }: { onToast: (msg: string) => void }) {
   }
 
   async function submit() {
-    const draft = buildDraft(text, uploaded, quote);
     if (!draft || busy || uploading) return;
     setBusy(true);
     try {
-      await postCard(draft);
+      const card = await postCard(draft);
       setText("");
       setFiles([]);
       setQuote(null);
-      onToast("captured → inbox");
+      setKind(null);
+      onCaptured(card);
     } catch {
       onToast("capture failed");
     } finally {
@@ -183,25 +204,22 @@ export function Composer({ onToast }: { onToast: (msg: string) => void }) {
         setOver(false);
         addFiles(e.dataTransfer.files);
       }}
-      className={`relative rounded-xl border bg-surface/60 transition-colors focus-within:border-line-2 focus-within:bg-surface ${
-        over ? "border-dashed border-accent bg-accent/5" : "border-line"
-      }`}
+      className={`relative rounded-xl border transition-colors ${over ? "border-dashed border-accent bg-accent/5" : "border-transparent"}`}
     >
       <div className="flex gap-3 px-4 pt-3">
         <span className="pt-0.5 font-mono text-accent">{quote ? "“" : ">"}</span>
         <textarea
           data-composer
+          autoFocus
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
               e.preventDefault();
               void submit();
-            } else if (e.key === "Escape") {
-              e.currentTarget.blur();
             }
           }}
-          rows={Math.min(8, Math.max(1, lines))}
+          rows={Math.min(10, Math.max(3, lines))}
           placeholder={
             quote ? "The quote…" : "What's on your mind? Paste a link, drop a file, or just type. # Title on line one."
           }
@@ -294,6 +312,14 @@ export function Composer({ onToast }: { onToast: (msg: string) => void }) {
         >
           “ quote
         </button>
+        <FacetMenu
+          name="kind"
+          values={[shownKind]}
+          multi={false}
+          direction="up"
+          options={KIND_OPTIONS}
+          onChange={(keys) => setKind(keys[0] ?? null)}
+        />
         <span className="ml-auto hidden items-center gap-1.5 sm:flex">
           {over ? (
             <span className="text-accent">release to attach</span>

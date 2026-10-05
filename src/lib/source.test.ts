@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sourceLabel, sourceOf } from "./source";
+import { parseSourceKey, sourceKey, sourceLabel, sourceOf } from "./source";
 
 describe("sourceOf", () => {
   it("prefers a valid props.source over the url", () => {
@@ -31,5 +31,19 @@ describe("sourceLabel", () => {
     expect(sourceLabel({ via: "book", author: "Seneca", work: "Letters", page: "12" })).toBe("Seneca, Letters p.12");
     expect(sourceLabel({ via: "book", work: "Letters" })).toBe("Letters");
     expect(sourceLabel({ via: "book", page: "3" })).toBe("book p.3");
+  });
+});
+
+describe("source facet keys", () => {
+  it("round-trips web domains and plain channels", () => {
+    expect(parseSourceKey(sourceKey({ via: "web", domain: "a.example.com" }))).toEqual({ via: "web", domain: "a.example.com" });
+    expect(parseSourceKey(sourceKey({ via: "book", author: "Seneca" }))).toEqual({ via: "book" });
+    expect(parseSourceKey(sourceKey({ via: "upload", filename: "x.pdf" }))).toEqual({ via: "upload" });
+  });
+
+  it("rejects unknown channels and empty domains from the URL", () => {
+    expect(parseSourceKey("web:")).toBeNull();
+    expect(parseSourceKey("carrier-pigeon")).toBeNull();
+    expect(parseSourceKey("")).toBeNull();
   });
 });

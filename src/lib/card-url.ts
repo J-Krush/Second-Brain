@@ -31,3 +31,12 @@ export function replaceParams(patch: Record<string, string | null>): void {
   }
   window.history.replaceState(null, "", url);
 }
+
+/** Multi-value facet params are comma lists: `?type=thought,link`. */
+export function csv(raw: string | null): string[] {
+  return raw ? raw.split(",").filter(Boolean) : [];
+}
+
+export function joinCsv(values: string[]): string | null {
+  return values.length ? values.join(",") : null;
+}

@@ -83,3 +83,37 @@ export function sourceLabel(s: Source): string {
     }
   }
 }
+
+/**
+ * Facet identity for filtering: web sources group by domain (`web:<domain>`),
+ * everything else by how it arrived. Mirrors the SQL in `listCards`.
+ */
+export type SourceFilter = { via: Exclude<Source["via"], "web"> } | { via: "web"; domain: string };
+
+export function sourceKey(s: Source): string {
+  return s.via === "web" ? `web:${s.domain}` : s.via;
+}
+
+export function parseSourceKey(key: string): SourceFilter | null {
+  if (key.startsWith("web:")) {
+    const domain = key.slice(4);
+    return domain ? { via: "web", domain } : null;
+  }
+  return key === "typed" || key === "share" || key === "upload" || key === "book" ? { via: key } : null;
+}
+
+/** Short label for a source facet, as opposed to a card's full provenance line. */
+export function sourceFacetLabel(f: SourceFilter): string {
+  switch (f.via) {
+    case "web":
+      return f.domain;
+    case "typed":
+      return "typed";
+    case "share":
+      return "shared";
+    case "upload":
+      return "uploaded";
+    case "book":
+      return "books";
+  }
+}

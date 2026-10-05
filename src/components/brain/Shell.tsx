@@ -1,8 +1,11 @@
 "use client";
 
 import { styleFor } from "@/components/card-style";
-import { replaceParams } from "@/lib/card-url";
-import type { Scope, View } from "./item";
+import { joinCsv, replaceParams } from "@/lib/card-url";
+import type { Facets } from "@/lib/cards";
+import { FacetMenu, type FacetOption } from "./FacetMenu";
+import type { View } from "./item";
+import { SiteMark } from "./parts";
 
 export interface TagOption {
   id: number;
@@ -11,79 +14,67 @@ export interface TagOption {
   count: number;
 }
 
+const SOURCE_GLYPH: Record<string, string> = {
+  typed: "¶",
+  share: "⇪",
+  upload: "⎘",
+  book: "❡",
+};
+
 /**
- * The bar under the composer: scope (inbox/library) on the left, kind + tag
- * filters, view (timeline/desk) on the right. Everything lives in the URL;
- * defaults are dropped so `/` stays clean.
+ * Sticky filter row: kind, source and tag as one kind of control, view
+ * (timeline/desk) on the right. Scope lives in the header. Everything is in
+ * the URL; defaults are dropped so `/` stays clean.
  */
 export function Shell({
-  scope,
   view,
-  type,
-  tagId,
-  inboxCount,
   types,
+  sources: sourceKeys,
+  tagIds,
+  facets,
   tags,
 }: {
-  scope: Scope;
   view: View;
-  type: string | null;
-  tagId: number | null;
-  inboxCount: string | null;
   types: string[];
+  sources: string[];
+  tagIds: number[];
+  facets: Facets | null;
   tags: TagOption[];
 }) {
-  return (
-    <div className="flex min-h-11 flex-wrap items-center gap-x-4 gap-y-1 py-1.5">
-      <div className="flex font-mono text-[11px] uppercase tracking-widest" role="tablist" aria-label="scope">
-        {(["inbox", "library"] as const).map((s) => (
-          <button
-            key={s}
-            type="button"
-            role="tab"
-            aria-selected={scope === s}
-            onClick={() => replaceParams({ scope: s === "inbox" ? null : s })}
-            className={`border-b-2 px-2.5 py-1 transition-colors ${
-              scope === s ? "border-accent text-ink" : "border-transparent text-ink-faint hover:text-ink"
-            }`}
-          >
-            {s}
-            {s === "inbox" && inboxCount !== null && <span className="ml-1.5 text-accent">{inboxCount}</span>}
-          </button>
-        ))}
-      </div>
+  const kinds: FacetOption[] = (facets?.kinds ?? []).map((k) => {
+    const s = styleFor(k.type);
+    return { key: k.type, label: s.label.toLowerCase(), count: k.count, glyph: <span className={s.text}>{s.glyph}</span> };
+  });
+  for (const t of types) {
+    if (kinds.some((k) => k.key === t)) continue;
+    const s = styleFor(t);
+    kinds.push({ key: t, label: s.label.toLowerCase(), count: 0, glyph: <span className={s.text}>{s.glyph}</span> });
+  }
 
-      <div className="sb-scroll flex min-w-0 flex-1 items-center gap-1 overflow-x-auto font-mono text-[12px]">
-        <Pill active={type === null} onClick={() => replaceParams({ type: null })}>
-          all
-        </Pill>
-        {types.map((t) => {
-          const s = styleFor(t);
-          return (
-            <Pill key={t} active={type === t} onClick={() => replaceParams({ type: type === t ? null : t })} title={s.label}>
-              <span className={type === t ? "" : s.text}>{s.glyph}</span>
-              <span className="hidden xl:inline">{s.label.toLowerCase()}</span>
-            </Pill>
-          );
-        })}
-        {tags.length > 0 && (
-          <select
-            value={tagId ?? ""}
-            onChange={(e) => replaceParams({ tag: e.target.value || null })}
-            aria-label="filter by tag"
-            className={`ml-1 rounded-full border bg-transparent px-2.5 py-1 outline-none transition-colors hover:border-line-2 ${
-              tagId !== null ? "border-accent/60 text-ink" : "border-line text-ink-faint"
-            }`}
-          >
-            <option value="">#&nbsp;any tag</option>
-            {tags.map((t) => (
-              <option key={t.id} value={t.id}>
-                #{t.name} ({t.count})
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
+  const sources: FacetOption[] = (facets?.sources ?? []).map((f) => ({
+    key: f.key,
+    label: f.label,
+    count: f.count,
+    glyph: f.domain ? <SiteMark label={f.domain} className="size-4 text-[9px]" /> : <span className="text-ink-dim">{SOURCE_GLYPH[f.via]}</span>,
+  }));
+  for (const k of sourceKeys) {
+    if (!sources.some((s) => s.key === k)) sources.push({ key: k, label: k.replace(/^web:/, ""), count: 0 });
+  }
+
+  const tagOptions: FacetOption[] = tags.map((t) => ({
+    key: String(t.id),
+    label: `#${t.name}`,
+    count: t.count,
+    glyph: <span className="size-2 rounded-full" style={{ background: t.color ?? "var(--color-ink-faint)" }} />,
+  }));
+
+  return (
+    <div className="flex min-h-11 flex-wrap items-center gap-2 py-2">
+      <FacetMenu name="kind" values={types} options={kinds} onChange={(keys) => replaceParams({ type: joinCsv(keys) })} />
+      <FacetMenu name="source" values={sourceKeys} options={sources} onChange={(keys) => replaceParams({ source: joinCsv(keys) })} />
+      {tags.length > 0 && (
+        <FacetMenu name="tag" values={tagIds.map(String)} options={tagOptions} onChange={(keys) => replaceParams({ tag: joinCsv(keys) })} />
+      )}
 
       <div className="ml-auto flex rounded-lg bg-surface p-0.5 font-mono text-[12px]" role="tablist" aria-label="view">
         {(["timeline", "desk"] as const).map((v) => (
@@ -102,31 +93,5 @@ export function Shell({
         ))}
       </div>
     </div>
-  );
-}
-
-function Pill({
-  active,
-  onClick,
-  title,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  title?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      aria-pressed={active}
-      className={`flex flex-none items-center gap-1.5 rounded-full px-3 py-1 transition-colors ${
-        active ? "bg-ink text-inset" : "text-ink-faint hover:bg-surface hover:text-ink"
-      }`}
-    >
-      {children}
-    </button>
   );
 }

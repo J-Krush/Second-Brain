@@ -1,8 +1,8 @@
 /**
- * Tiny client-side bus so any surface (hotkey, inbox button, board canvas)
- * can open the global capture modal. The board canvas passes onCreated to
- * intercept the new card and place it; returning true suppresses the modal's
- * default navigation/refresh.
+ * Tiny client-side bus so any surface (hotkey, board canvas) can open the
+ * global capture dialog. The board canvas passes onCreated to intercept the
+ * new card and place it; returning true suppresses the dialog's default
+ * follow-up (toast, or navigating into a new board).
  */
 export interface CreatedCard {
   id: string;
@@ -14,7 +14,6 @@ export interface CreatedCard {
 }
 
 export interface CaptureOptions {
-  defaultType?: string;
   onCreated?: (card: CreatedCard) => boolean | void;
 }
 
@@ -22,7 +21,7 @@ type Listener = (opts: CaptureOptions) => void;
 
 let listener: Listener | null = null;
 
-export function registerCaptureModal(fn: Listener): () => void {
+export function registerCaptureDialog(fn: Listener): () => void {
   listener = fn;
   return () => {
     if (listener === fn) listener = null;
