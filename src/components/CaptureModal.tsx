@@ -88,21 +88,17 @@ export function CaptureModal() {
 
   useEffect(() => registerCaptureModal(openModal), [openModal]);
 
-  // Global hotkey: c captures anywhere (unless typing).
+  // Global hotkey: ⌘J (Ctrl+J elsewhere) starts a new item anywhere. On `/`
+  // that's the inline composer; on other pages it's this modal.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      const target = e.target as HTMLElement | null;
-      const typing =
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable);
-      if (e.key === "c" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        e.preventDefault();
-        const composer = document.querySelector<HTMLTextAreaElement>("[data-composer]");
-        if (composer) composer.focus();
-        else openModal({});
-      }
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== "j") return;
+      e.preventDefault();
+      const composer = document.querySelector<HTMLTextAreaElement>("[data-composer]");
+      if (composer) {
+        composer.focus();
+        composer.scrollIntoView({ block: "center" });
+      } else openModal({});
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

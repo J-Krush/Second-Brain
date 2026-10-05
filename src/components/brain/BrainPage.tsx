@@ -38,7 +38,6 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
   const [failed, setFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reload, setReload] = useState(0);
-  const [inboxCount, setInboxCount] = useState<string | null>(null);
   const [types, setTypes] = useState<string[]>([]);
   const request = useRef(0);
   const bar = useRef<HTMLDivElement>(null);
@@ -64,7 +63,6 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
     const id = ++request.current;
     const q = new URLSearchParams(queryKey);
     const unfiltered = !q.has("type") && !q.has("tag");
-    const isInbox = q.get("view") === "inbox";
     fetch(`/api/cards?${queryKey}`)
       .then((res) => {
         if (!res.ok) throw new Error(String(res.status));
@@ -74,10 +72,7 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
         if (id !== request.current) return;
         setPage(data);
         setFailed(false);
-        if (unfiltered) {
-          setTypes(Object.keys(CARD_STYLE).filter((t) => data.items.some((c) => c.type === t)));
-          if (isInbox) setInboxCount(`${data.items.length}${data.nextCursor ? "+" : ""}`);
-        }
+        if (unfiltered) setTypes(Object.keys(CARD_STYLE).filter((t) => data.items.some((c) => c.type === t)));
       })
       .catch(() => {
         if (id === request.current) setFailed(true);
@@ -107,20 +102,15 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
 
   return (
     <div style={{ "--sb-bar": `${barHeight}px` } as React.CSSProperties}>
+      <div className="mx-auto max-w-[96rem] px-6 pt-6 lg:px-10">
+        <div className="mx-auto max-w-[46rem]">
+          <Composer onToast={toast.show} />
+        </div>
+      </div>
+
       <div ref={bar} className="sticky top-14 z-20 border-b border-line bg-base/85 backdrop-blur">
-        <div className="mx-auto max-w-[96rem] px-6 pt-3 lg:px-10">
-          <div className="mx-auto max-w-[46rem]">
-            <Composer onToast={toast.show} />
-          </div>
-          <Shell
-            scope={scope}
-            view={view}
-            type={type}
-            tagId={tagId}
-            inboxCount={inboxCount}
-            types={shownTypes}
-            tags={tags}
-          />
+        <div className="mx-auto max-w-[96rem] px-6 lg:px-10">
+          <Shell view={view} type={type} tagId={tagId} types={shownTypes} tags={tags} />
         </div>
       </div>
 

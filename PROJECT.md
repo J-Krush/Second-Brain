@@ -203,7 +203,7 @@ Non-browser capture clients (menu-bar app, iOS shortcut) authenticate with `Auth
 
 ## UI views (priority order)
 
-1. **Inbox:** reverse-chronological stream of all cards. The default landing view. Inline quick-capture box pinned at top. Keyboard-first: `c` to capture, `/` to search.
+1. **Inbox:** reverse-chronological stream of all cards. The default landing view. Inline quick-capture box at the top of the stream, under the header. Keyboard-first: `⌘J` to capture, `⌘K` (or `/`) to search.
 2. **Library:** table/list with tag filters, type filters, and the search box. Dense, fast.
 3. **Card view:** markdown editor, tags, attachments, backlinks ("appears on boards: ...", "linked from: ...").
 4. **Boards (tldraw):** custom card shapes rendering real card content (thumbnail images, quote styling per type). Placement changes persist to `placements`; tldraw-native scribbles/arrows persist as a snapshot in the board card's `props`. Double-click a board-type card to drill in; breadcrumb trail to navigate back up.

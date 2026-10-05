@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { CaptureModal } from "@/components/CaptureModal";
 import { LogoutButton } from "@/components/LogoutButton";
+import { ScopeNav } from "@/components/nav/ScopeNav";
 import { GlobalSearch } from "@/components/search/GlobalSearch";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import { SessionRefresh } from "@/components/SessionRefresh";
@@ -17,7 +18,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Link href="/" className="flex-none font-display text-lg font-bold tracking-tight text-ink">
             <span className="text-accent">&gt;</span> second brain
           </Link>
-          <div className="mx-auto w-full max-w-xl">
+          <Suspense fallback={null}>
+            <ScopeNav />
+          </Suspense>
+          <div className="ml-auto flex w-full max-w-xs justify-end">
             <Suspense fallback={null}>
               <GlobalSearch />
             </Suspense>

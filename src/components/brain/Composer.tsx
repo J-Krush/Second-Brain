@@ -115,9 +115,9 @@ interface Attachment {
 }
 
 /**
- * Sticky capture box: type, paste a link, attach or drop files. ⌘↵ captures
- * into the inbox. The textarea carries `data-composer` so the global `c`
- * hotkey can focus it.
+ * Capture box at the top of the stream: type, paste a link, attach or drop
+ * files. ⌘↵ captures into the inbox. The textarea carries `data-composer` so
+ * the global ⌘J hotkey can focus it.
  */
 export function Composer({ onToast }: { onToast: (msg: string) => void }) {
   const [text, setText] = useState("");

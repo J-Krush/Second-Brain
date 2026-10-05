@@ -299,6 +299,15 @@ export async function markTriaged(id: string): Promise<void> {
     .where(and(eq(cards.id, id), isNull(cards.triagedAt)));
 }
 
+/** Untriaged, undeleted cards — the header's inbox badge. */
+export async function countInbox(): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(cards)
+    .where(and(isNull(cards.deletedAt), isNull(cards.triagedAt)));
+  return row?.n ?? 0;
+}
+
 export async function softDeleteCard(id: string): Promise<boolean> {
   const [row] = await db
     .update(cards)

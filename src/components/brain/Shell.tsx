@@ -2,7 +2,7 @@
 
 import { styleFor } from "@/components/card-style";
 import { replaceParams } from "@/lib/card-url";
-import type { Scope, View } from "./item";
+import type { View } from "./item";
 
 export interface TagOption {
   id: number;
@@ -12,47 +12,25 @@ export interface TagOption {
 }
 
 /**
- * The bar under the composer: scope (inbox/library) on the left, kind + tag
- * filters, view (timeline/desk) on the right. Everything lives in the URL;
- * defaults are dropped so `/` stays clean.
+ * Sticky filter row under the composer: kind + tag filters on the left, view
+ * (timeline/desk) on the right. Scope lives in the header. Everything is in
+ * the URL; defaults are dropped so `/` stays clean.
  */
 export function Shell({
-  scope,
   view,
   type,
   tagId,
-  inboxCount,
   types,
   tags,
 }: {
-  scope: Scope;
   view: View;
   type: string | null;
   tagId: number | null;
-  inboxCount: string | null;
   types: string[];
   tags: TagOption[];
 }) {
   return (
     <div className="flex min-h-11 flex-wrap items-center gap-x-4 gap-y-1 py-1.5">
-      <div className="flex font-mono text-[11px] uppercase tracking-widest" role="tablist" aria-label="scope">
-        {(["inbox", "library"] as const).map((s) => (
-          <button
-            key={s}
-            type="button"
-            role="tab"
-            aria-selected={scope === s}
-            onClick={() => replaceParams({ scope: s === "inbox" ? null : s })}
-            className={`border-b-2 px-2.5 py-1 transition-colors ${
-              scope === s ? "border-accent text-ink" : "border-transparent text-ink-faint hover:text-ink"
-            }`}
-          >
-            {s}
-            {s === "inbox" && inboxCount !== null && <span className="ml-1.5 text-accent">{inboxCount}</span>}
-          </button>
-        ))}
-      </div>
-
       <div className="sb-scroll flex min-w-0 flex-1 items-center gap-1 overflow-x-auto font-mono text-[12px]">
         <Pill active={type === null} onClick={() => replaceParams({ type: null })}>
           all
