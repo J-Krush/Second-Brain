@@ -27,6 +27,7 @@ Fill in `.env.local`:
 | `CRON_SECRET` | Any long random string; lets you call `/api/admin/*` by hand |
 | `R2_*` | Leave the MinIO defaults from the example (`minioadmin`/`minioadmin`, bucket `secondbrain-dev`, endpoint `http://localhost:9000`). `docker compose` creates the bucket |
 | `CF_ACCOUNT_ID`, `CF_AI_TOKEN` | Optional. Set them to get real embeddings in dev via the Workers AI REST API; create the token in the Cloudflare dashboard under Workers AI → *Use REST API* |
+| `LLM_PROVIDER` | Leave unset. `/ask` then runs retrieval-only and shows the passages a model would read. Providers are registered in `src/lib/llm.ts` |
 
 Then:
 
@@ -60,6 +61,7 @@ Log in at `/login`. `⌘J` to capture, `⌘K` to search.
 | File upload + thumbnails | Works. MinIO takes the bytes; wrangler's platform proxy emulates the `IMAGES` binding locally, so dimensions and webp variants are generated in dev too |
 | Link OpenGraph capture | Works (plain `fetch`) |
 | Semantic / hybrid search | Needs embeddings. Without `CF_AI_TOKEN`, cards are not embedded, `mode=semantic` returns 503, and `hybrid` returns `degraded: true` with FTS-only results. The UI shows an amber note |
+| Ask | Retrieval works (FTS-only without embeddings). An answer needs `LLM_PROVIDER` set to a registered provider; unset, the page says `no model · retrieval only` |
 | Cron triggers | Not scheduled locally. Call the routes by hand: `curl -X POST -H "Authorization: Bearer $CRON_SECRET" localhost:3001/api/admin/gc`, or use the buttons on `/settings` |
 
 ## Database

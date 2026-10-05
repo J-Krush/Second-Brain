@@ -19,6 +19,13 @@ export interface SearchFilters {
   type?: string;
   tagId?: number;
   limit?: number;
+  /**
+   * `all` (default) is websearch semantics: every term must match, which is
+   * what a search box wants. `any` ORs the question's lexemes and lets
+   * ts_rank order by how many hit, which is what retrieval for /ask wants:
+   * "what do I know about X" must not require a card to contain "know".
+   */
+  match?: "all" | "any";
 }
 
 // Shared filter fragments so every mode applies type/tag consistently.
@@ -64,21 +71,35 @@ export async function searchQuick(
 }
 
 /**
- * Full-text: websearch_to_tsquery against the generated `search` column,
- * ranked with ts_rank (title weight A already outranks body weight B).
+ * The tsquery for a user string. `any` extracts lexemes with the same
+ * normalisation as the indexed column (stopwords gone, stems applied) and
+ * ORs them; each is quoted so URLs and apostrophes survive the re-parse.
+ */
+function tsquery(q: string, match: SearchFilters["match"]) {
+  if (match === "any") {
+    return sql`(SELECT to_tsquery('english', coalesce(string_agg(quote_literal(lexeme), ' | '), ''))
+                FROM unnest(to_tsvector('english', ${q})))`;
+  }
+  return sql`websearch_to_tsquery('english', ${q})`;
+}
+
+/**
+ * Full-text against the generated `search` column, ranked with ts_rank
+ * (title weight A already outranks body weight B).
  */
 export async function searchFts(
   q: string,
   filters: SearchFilters = {},
 ): Promise<SearchHit[]> {
   const limit = filters.limit ?? 50;
+  const query = tsquery(q, filters.match);
   const rows = await db.execute(sql`
     SELECT c.id, c.type, c.title, c.body, c.url,
            c.created_at AS "createdAt",
-           ts_rank(c.search, websearch_to_tsquery('english', ${q})) AS score
+           ts_rank(c.search, ${query}) AS score
     FROM cards c
     WHERE c.deleted_at IS NULL
-      AND c.search @@ websearch_to_tsquery('english', ${q})
+      AND c.search @@ ${query}
       ${typeFragment(filters.type)}
       ${tagFragment(filters.tagId)}
     ORDER BY score DESC

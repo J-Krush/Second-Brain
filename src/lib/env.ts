@@ -48,4 +48,8 @@ export const env = {
   get CRON_SECRET() {
     return process.env.CRON_SECRET || undefined;
   },
+  // Which model answers /ask (see src/lib/llm.ts). Unset = retrieval only.
+  get LLM_PROVIDER() {
+    return process.env.LLM_PROVIDER || undefined;
+  },
 };
