@@ -46,7 +46,7 @@ Rather than `wrangler secret put` by hand, the workflow writes a `--secrets-file
 
 ### D20 · Custom domain via `custom_domain` route, `workers.dev` kept on
 
-Production is served at `second-brain.jkrush.dev` through a Workers Custom Domain declared in `wrangler.jsonc` `routes`, so DNS and the certificate are created by the deploy rather than by hand. `workers_dev` is set to `true` explicitly: wrangler disables the `workers.dev` URL when `routes` exist, which would break any capture client still pointed at it, and redeploys with `workers_dev: false` plus custom-domain-only routes currently also require *Zone → Workers Routes* read on the CI token ([workers-sdk#15863](https://github.com/cloudflare/workers-sdk/issues/15863)). Cost: the CI token needs *Workers Routes → Edit* on the `jkrush.dev` zone whenever the domain changes.
+Production is served at `brain.jkrush.dev` through a Workers Custom Domain declared in `wrangler.jsonc` `routes`, so DNS and the certificate are created by the deploy rather than by hand. `workers_dev` is set to `true` explicitly: wrangler disables the `workers.dev` URL when `routes` exist, which would break any capture client still pointed at it, and redeploys with `workers_dev: false` plus custom-domain-only routes currently also require *Zone → Workers Routes* read on the CI token ([workers-sdk#15863](https://github.com/cloudflare/workers-sdk/issues/15863)). Cost: the CI token needs *Workers Routes → Edit* on the `jkrush.dev` zone whenever the domain changes.
 
 ## Product and UI
 

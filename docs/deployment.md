@@ -1,6 +1,6 @@
 # Deployment
 
-Production is one Cloudflare Worker (`second-brain`) served at `https://second-brain.jkrush.dev`, a Neon Postgres database reached through Hyperdrive, and a private R2 bucket. GitHub Actions owns the pipeline: every push to `main` typechecks, tests, **migrates, then deploys**. Nobody runs `pnpm deploy` by hand against production.
+Production is one Cloudflare Worker (`second-brain`) served at `https://brain.jkrush.dev`, a Neon Postgres database reached through Hyperdrive, and a private R2 bucket. GitHub Actions owns the pipeline: every push to `main` typechecks, tests, **migrates, then deploys**. Nobody runs `pnpm deploy` by hand against production.
 
 ## Pipeline (`.github/workflows/deploy.yml`)
 
@@ -60,7 +60,7 @@ Create a `production` environment (no approval gate required, but it is where yo
 
 ### 4. First login
 
-Visit `https://second-brain.jkrush.dev` (or the `workers.dev` URL), log in with the password you hashed. The session cookie is per-host, so each hostname needs its own login. Cron Triggers (`0 4 * * *` GC, `15 * * * *` embed sweep) are registered by the deploy from `wrangler.jsonc` → `triggers.crons`.
+Visit `https://brain.jkrush.dev` (or the `workers.dev` URL), log in with the password you hashed. The session cookie is per-host, so each hostname needs its own login. Cron Triggers (`0 4 * * *` GC, `15 * * * *` embed sweep) are registered by the deploy from `wrangler.jsonc` → `triggers.crons`.
 
 ## Secrets and config: who owns what
 
@@ -77,6 +77,6 @@ Visit `https://second-brain.jkrush.dev` (or the `workers.dev` URL), log in with 
 
 - **Logs:** `observability.enabled: true` in `wrangler.jsonc`; use the Workers dashboard or `pnpm cf tail second-brain`.
 - **Rotate the password:** `pnpm hash-password "new"` → `gh secret set APP_PASSWORD_HASH` → re-run the workflow. Existing sessions stay valid until they expire (30 days rolling) unless you also rotate `SESSION_SECRET`.
-- **Run maintenance by hand:** buttons on `/settings`, or `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://second-brain.jkrush.dev/api/admin/gc`.
+- **Run maintenance by hand:** buttons on `/settings`, or `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://brain.jkrush.dev/api/admin/gc`.
 - **Escape hatch:** `/settings` → *Export everything* streams a zip of every card as markdown plus every file. `pg_dump` against the Neon direct URL covers the rest.
 - **Preview before merging an edge-sensitive change:** `pnpm preview` runs the built Worker locally under wrangler with `.dev.vars`, which is the only way to exercise `worker.ts`, bindings, and the OpenNext output before CI does.
