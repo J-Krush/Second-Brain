@@ -1,69 +1,68 @@
-import {
-  DeleteObjectsCommand,
-  GetObjectCommand,
-  HeadObjectCommand,
-  ListObjectsV2Command,
-  PutObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { AwsClient } from "aws4fetch";
 import { env } from "./env";
 
 /**
- * Cloudflare R2 accessed purely through the S3 API, so the backend stays
- * swappable (MinIO on a NAS, etc.). `R2_ENDPOINT` overrides the derived
- * Cloudflare endpoint for those alternatives. forcePathStyle keeps MinIO and
+ * Cloudflare R2 accessed purely through the S3 API (SigV4 via aws4fetch, which
+ * runs on plain fetch + WebCrypto in both Workers and Node), so the backend
+ * stays swappable (MinIO on a NAS, etc.). `R2_ENDPOINT` overrides the derived
+ * Cloudflare endpoint for those alternatives. Path-style URLs keep MinIO and
  * R2 both happy.
  */
-let client: S3Client | undefined;
+let client: AwsClient | undefined;
 
-function s3(): S3Client {
+function s3(): AwsClient {
   if (client) return client;
-  const endpoint =
-    env.R2_ENDPOINT ?? `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-  client = new S3Client({
+  client = new AwsClient({
+    accessKeyId: env.R2_ACCESS_KEY_ID,
+    secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+    service: "s3",
     region: "auto",
-    endpoint,
-    forcePathStyle: true,
-    // Recent AWS SDK v3 injects x-amz-checksum-* into presigned URLs by
-    // default; R2 and browser fetch PUTs reject those. Only add checksums when
-    // an operation actually requires them, keeping presigned PUTs clean.
-    requestChecksumCalculation: "WHEN_REQUIRED",
-    responseChecksumValidation: "WHEN_REQUIRED",
-    credentials: {
-      accessKeyId: env.R2_ACCESS_KEY_ID,
-      secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-    },
   });
   return client;
 }
 
+function bucketUrl(): string {
+  const endpoint =
+    env.R2_ENDPOINT ?? `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+  return `${endpoint.replace(/\/$/, "")}/${env.R2_BUCKET}`;
+}
+
+function objectUrl(key: string): string {
+  const path = key.split("/").map(encodeURIComponent).join("/");
+  return `${bucketUrl()}/${path}`;
+}
+
 const PRESIGN_TTL = 300; // 5 minutes, for both PUT and GET
 
-export function presignPut(key: string, mime: string): Promise<string> {
-  return getSignedUrl(
-    s3(),
-    new PutObjectCommand({ Bucket: env.R2_BUCKET, Key: key, ContentType: mime }),
-    { expiresIn: PRESIGN_TTL },
-  );
+async function presign(key: string, method: "GET" | "PUT"): Promise<string> {
+  const url = new URL(objectUrl(key));
+  url.searchParams.set("X-Amz-Expires", String(PRESIGN_TTL));
+  // No content-type is signed on PUT: the browser sends its own, and signing
+  // it would force an exact header match on upload.
+  const signed = await s3().sign(new Request(url, { method }), {
+    aws: { signQuery: true },
+  });
+  return signed.url;
+}
+
+export function presignPut(key: string, _mime: string): Promise<string> {
+  return presign(key, "PUT");
 }
 
 export function presignGet(key: string): Promise<string> {
-  return getSignedUrl(
-    s3(),
-    new GetObjectCommand({ Bucket: env.R2_BUCKET, Key: key }),
-    { expiresIn: PRESIGN_TTL },
-  );
+  return presign(key, "GET");
 }
 
 export async function headObject(
   key: string,
 ): Promise<{ size: number; mime: string | undefined } | null> {
   try {
-    const res = await s3().send(
-      new HeadObjectCommand({ Bucket: env.R2_BUCKET, Key: key }),
-    );
-    return { size: res.ContentLength ?? 0, mime: res.ContentType };
+    const res = await s3().fetch(objectUrl(key), { method: "HEAD" });
+    if (!res.ok) return null;
+    return {
+      size: Number(res.headers.get("content-length") ?? 0),
+      mime: res.headers.get("content-type") ?? undefined,
+    };
   } catch {
     return null;
   }
@@ -74,43 +73,71 @@ export async function putObject(
   body: Buffer,
   mime: string,
 ): Promise<void> {
-  await s3().send(
-    new PutObjectCommand({
-      Bucket: env.R2_BUCKET,
-      Key: key,
-      Body: body,
-      ContentType: mime,
-    }),
-  );
+  // Sign, then send the raw bytes ourselves: aws4fetch's own fetch re-wraps
+  // the body in a Request, which Node sends chunked, and S3 PUT rejects a
+  // missing Content-Length (411).
+  const bytes = new Uint8Array(body);
+  const signed = await s3().sign(objectUrl(key), {
+    method: "PUT",
+    body: bytes,
+    headers: { "content-type": mime },
+  });
+  const res = await fetch(signed.url, {
+    method: "PUT",
+    headers: signed.headers,
+    body: bytes,
+  });
+  if (!res.ok) {
+    throw new Error(`R2 PUT ${key} failed: ${res.status} ${await res.text()}`);
+  }
 }
 
 export async function getObjectBytes(key: string): Promise<Buffer | null> {
   try {
-    const res = await s3().send(
-      new GetObjectCommand({ Bucket: env.R2_BUCKET, Key: key }),
-    );
-    const bytes = await res.Body?.transformToByteArray();
-    return bytes ? Buffer.from(bytes) : null;
+    const res = await s3().fetch(objectUrl(key));
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
   } catch {
     return null;
   }
 }
 
+const XML_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&apos;": "'",
+};
+
+function xmlText(value: string): string {
+  return value.replace(/&(amp|lt|gt|quot|apos);/g, (m) => XML_ENTITIES[m] ?? m);
+}
+
+/**
+ * ListObjectsV2, parsed with regexes rather than an XML parser (none exists
+ * in the Workers runtime). Safe because every key this app writes is
+ * `files/<uuid>/<name>.<ext>`: plain ASCII with no markup characters.
+ */
 export async function listPrefix(prefix: string): Promise<string[]> {
   const keys: string[] = [];
   let token: string | undefined;
   do {
-    const res = await s3().send(
-      new ListObjectsV2Command({
-        Bucket: env.R2_BUCKET,
-        Prefix: prefix,
-        ContinuationToken: token,
-      }),
-    );
-    for (const obj of res.Contents ?? []) {
-      if (obj.Key) keys.push(obj.Key);
+    const url = new URL(bucketUrl());
+    url.searchParams.set("list-type", "2");
+    url.searchParams.set("prefix", prefix);
+    if (token) url.searchParams.set("continuation-token", token);
+    const res = await s3().fetch(url);
+    if (!res.ok) {
+      throw new Error(`R2 list ${prefix} failed: ${res.status} ${await res.text()}`);
     }
-    token = res.IsTruncated ? res.NextContinuationToken : undefined;
+    const xml = await res.text();
+    for (const m of xml.matchAll(/<Key>([^<]*)<\/Key>/g)) {
+      keys.push(xmlText(m[1]!));
+    }
+    const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
+    const next = /<NextContinuationToken>([^<]*)<\/NextContinuationToken>/.exec(xml);
+    token = truncated && next ? xmlText(next[1]!) : undefined;
   } while (token);
   return keys;
 }
@@ -121,15 +148,22 @@ export async function deleteByPrefix(prefix: string): Promise<number> {
   return keys.length;
 }
 
+const DELETE_CONCURRENCY = 20;
+
+/**
+ * Individual DELETEs in parallel batches. The multi-object `?delete` API
+ * needs a Content-MD5 header, and MD5 is not available in WebCrypto.
+ * Deleting a missing key is a 204 in S3, so retries are idempotent.
+ */
 export async function deleteKeys(keys: string[]): Promise<void> {
-  // DeleteObjects caps at 1000 keys per request.
-  for (let i = 0; i < keys.length; i += 1000) {
-    const batch = keys.slice(i, i + 1000);
-    if (batch.length === 0) continue;
-    await s3().send(
-      new DeleteObjectsCommand({
-        Bucket: env.R2_BUCKET,
-        Delete: { Objects: batch.map((Key) => ({ Key })) },
+  for (let i = 0; i < keys.length; i += DELETE_CONCURRENCY) {
+    const batch = keys.slice(i, i + DELETE_CONCURRENCY);
+    await Promise.all(
+      batch.map(async (key) => {
+        const res = await s3().fetch(objectUrl(key), { method: "DELETE" });
+        if (!res.ok && res.status !== 404) {
+          throw new Error(`R2 DELETE ${key} failed: ${res.status}`);
+        }
       }),
     );
   }

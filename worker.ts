@@ -2,7 +2,7 @@
 import { default as handler } from "./.open-next/worker.js";
 
 /**
- * Cron Triggers call the same admin routes the Vercel crons used, through the
+ * Cron Triggers call the admin maintenance routes, through the
  * generated Next fetch handler, authenticated with CRON_SECRET. Schedules are
  * declared in wrangler.jsonc `triggers.crons` and matched here by expression.
  */
@@ -10,6 +10,12 @@ const CRON_ROUTES: Record<string, string> = {
   "0 4 * * *": "/api/admin/gc",
   "15 * * * *": "/api/admin/embed-sweep",
 };
+
+// Secrets only appear in the generated CloudflareEnv when they happen to be in
+// the local .dev.vars, so the one this entry reads is declared explicitly.
+interface WorkerEnv extends CloudflareEnv {
+  CRON_SECRET: string;
+}
 
 export default {
   fetch: handler.fetch,
@@ -28,4 +34,4 @@ export default {
       console.error(`cron ${path} failed: ${response.status} ${await response.text()}`);
     }
   },
-} satisfies ExportedHandler<CloudflareEnv>;
+} satisfies ExportedHandler<WorkerEnv>;

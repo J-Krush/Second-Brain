@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eq } from "drizzle-orm";
-import sharp from "sharp";
 import { db } from "@/db";
 import { files } from "@/db/schema";
 import type { FileRow } from "@/db/schema";
@@ -23,6 +23,21 @@ const EXT_BY_MIME: Record<string, string> = {
 };
 
 const THUMB_WIDTHS = [400, 1200] as const;
+
+// Boundary types for the slice of the Cloudflare Images binding this module
+// uses (replaces sharp). Declared locally because the generated CloudflareEnv
+// types clash with the DOM lib the app compiles against.
+interface ImagesHandle {
+  transform(o: { width: number }): ImagesHandle;
+  output(o: { format: "image/webp"; quality?: number }): Promise<{ response(): Response }>;
+}
+interface ImagesEnv {
+  IMAGES: {
+    input(s: ReadableStream<Uint8Array>): ImagesHandle;
+    // SVG input reports only `format`, hence the optional dimensions.
+    info(s: ReadableStream<Uint8Array>): Promise<{ width?: number; height?: number }>;
+  };
+}
 
 export function extForMime(mime: string): string {
   return EXT_BY_MIME[mime] ?? "bin";
@@ -109,14 +124,17 @@ export async function confirmUpload(fileId: string): Promise<FileRow | null> {
   if (isImage(row.mime)) {
     const bytes = await getObjectBytes(originalKey(row));
     if (bytes) {
-      const meta = await sharp(bytes).metadata();
-      width = meta.width ?? null;
-      height = meta.height ?? null;
+      const { env } = getCloudflareContext() as { env: ImagesEnv };
+      const blob = new Blob([new Uint8Array(bytes)]);
+      const info = await env.IMAGES.info(blob.stream());
+      width = info.width ?? null;
+      height = info.height ?? null;
       for (const w of THUMB_WIDTHS) {
-        const thumb = await sharp(bytes)
-          .resize({ width: w, withoutEnlargement: true })
-          .webp({ quality: 82 })
-          .toBuffer();
+        // The default fit is scale-down, so narrow images are never enlarged.
+        const result = await env.IMAGES.input(blob.stream())
+          .transform({ width: w })
+          .output({ format: "image/webp", quality: 82 });
+        const thumb = Buffer.from(await result.response().arrayBuffer());
         await putObject(`${row.r2Prefix}thumb-${w}.webp`, thumb, "image/webp");
       }
     }
