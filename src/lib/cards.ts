@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cardTags, cards, edges, fileRefs, files, placements, tags } from "@/db/schema";
 import { syncInlineRefs } from "./filerefs";
@@ -145,9 +145,10 @@ async function tagsFor(cardIds: string[]): Promise<Map<string, CardTag[]>> {
 
 export interface ListParams {
   view: "inbox" | "library";
-  type?: string;
-  tagId?: number;
-  source?: SourceFilter;
+  /** Within one facet values are OR'd; facets are AND'd together. */
+  types?: string[];
+  tagIds?: number[];
+  sources?: SourceFilter[];
   order?: "asc" | "desc"; // created_at; default desc (newest first)
   limit?: number;
   cursor?: string; // "<iso>|<uuid>"
@@ -169,18 +170,22 @@ const DEFAULT_LIMIT = 50;
 export async function listCards(params: ListParams): Promise<ListResult> {
   const limit = Math.min(params.limit ?? DEFAULT_LIMIT, 200);
   const filters = scopeFilters(params.view);
-  if (params.source) {
-    filters.push(sql`${cards.props} #>> '{source,via}' = ${params.source.via}`);
-    if (params.source.via === "web") {
-      filters.push(sql`${cards.props} #>> '{source,domain}' = ${params.source.domain}`);
-    }
-  }
-  if (params.type && CARD_TYPES[params.type]) {
-    filters.push(eq(cards.type, params.type));
-  }
-  if (params.tagId !== undefined) {
+  if (params.sources?.length) {
     filters.push(
-      sql`EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = ${cards.id} AND ct.tag_id = ${params.tagId})`,
+      or(
+        ...params.sources.map((s) =>
+          s.via === "web"
+            ? sql`${cards.props} #>> '{source,via}' = 'web' AND ${cards.props} #>> '{source,domain}' = ${s.domain}`
+            : sql`${cards.props} #>> '{source,via}' = ${s.via}`,
+        ),
+      )!,
+    );
+  }
+  const types = params.types?.filter((t) => CARD_TYPES[t]) ?? [];
+  if (types.length) filters.push(inArray(cards.type, types));
+  if (params.tagIds?.length) {
+    filters.push(
+      sql`EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = ${cards.id} AND ct.tag_id = ANY(${params.tagIds}::int[]))`,
     );
   }
   if (params.cursor) {

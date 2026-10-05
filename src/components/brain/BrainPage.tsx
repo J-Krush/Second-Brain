@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { CardModal } from "@/components/card/CardModal";
 import { CARD_STYLE } from "@/components/card-style";
 import { onCardChanged } from "@/lib/card-events";
-import { replaceParams } from "@/lib/card-url";
+import { csv, joinCsv, replaceParams } from "@/lib/card-url";
 import type { Facets } from "@/lib/cards";
 import { parseSourceKey } from "@/lib/source";
 import { Desk } from "./Desk";
@@ -29,12 +29,11 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
   const params = useSearchParams();
   const scope: Scope = params.get("scope") === "library" ? "library" : "inbox";
   const view: View = params.get("view") === "desk" ? "desk" : "timeline";
-  const rawType = params.get("type");
-  const type = rawType && Object.hasOwn(CARD_STYLE, rawType) ? rawType : null;
-  const rawSource = params.get("source");
-  const source = rawSource && parseSourceKey(rawSource) ? rawSource : null;
-  const rawTag = Number(params.get("tag"));
-  const tagId = tags.some((t) => t.id === rawTag) ? rawTag : null;
+  const types = csv(params.get("type")).filter((t) => Object.hasOwn(CARD_STYLE, t));
+  const sources = csv(params.get("source")).filter((k) => parseSourceKey(k) !== null);
+  const tagIds = csv(params.get("tag"))
+    .map(Number)
+    .filter((id) => tags.some((t) => t.id === id));
 
   const toast = useToast();
   const [page, setPage] = useState<Page | null>(null);
@@ -47,9 +46,9 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
   const [barHeight, setBarHeight] = useState(0);
 
   const query = new URLSearchParams({ view: scope });
-  if (type) query.set("type", type);
-  if (source) query.set("source", source);
-  if (tagId !== null) query.set("tag", String(tagId));
+  if (types.length) query.set("type", types.join(","));
+  if (sources.length) query.set("source", sources.join(","));
+  if (tagIds.length) query.set("tag", tagIds.join(","));
   const queryKey = query.toString();
 
   useEffect(() => onCardChanged(() => setReload((n) => n + 1)), []);
@@ -108,14 +107,14 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
     }
   }
 
-  const filtered = type !== null || source !== null || tagId !== null;
+  const filtered = types.length + sources.length + tagIds.length > 0;
   const items = page?.items ?? [];
 
   return (
     <div style={{ "--sb-bar": `${barHeight}px` } as React.CSSProperties}>
-      <div ref={bar} className="sticky top-14 z-20 border-b border-line bg-base/85 backdrop-blur">
+      <div ref={bar} className="sticky top-14 z-20 bg-base/85 backdrop-blur">
         <div className="mx-auto max-w-[96rem] px-6 lg:px-10">
-          <Shell view={view} type={type} source={source} tagId={tagId} facets={facets} tags={tags} />
+          <Shell view={view} types={types} sources={sources} tagIds={tagIds} facets={facets} tags={tags} />
         </div>
       </div>
 

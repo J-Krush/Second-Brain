@@ -1,4 +1,5 @@
 import { AdminActions } from "@/components/AdminActions";
+import { LogoutButton } from "@/components/LogoutButton";
 import { requireSession } from "@/lib/page-auth";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,11 @@ export default async function SettingsPage() {
         also runs on a nightly cron.
       </p>
       <AdminActions />
+      <section className="mt-12 border-t border-line pt-6">
+        <h2 className="font-mono text-[10px] uppercase tracking-widest text-ink-faint">Session</h2>
+        <p className="mb-4 mt-1 text-sm text-ink-dim">Signs this browser out. Other devices keep their sessions.</p>
+        <LogoutButton />
+      </section>
     </main>
   );
 }

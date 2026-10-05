@@ -204,7 +204,7 @@ Non-browser capture clients (menu-bar app, iOS shortcut) authenticate with `Auth
 ## UI views (priority order)
 
 1. **Inbox:** reverse-chronological stream of untriaged cards. The default landing view. No inline form: `⌘J` opens the capture dialog (type, paste a link, attach files, or pick a kind), `⌘K` (or `/`) opens search.
-2. **Library:** every card, same page (`?scope=library`), seen as a Timeline daybook or a Desk. Filters are three uniform menus — kind, source (typed / domain / shared / uploaded / books), tag — backed by `GET /api/cards/facets` counts and stored in the URL.
+2. **Library:** every card, same page (`?scope=library`), seen as a Timeline daybook or a Desk. Filters are three uniform multi-select menus — kind, source (typed / domain / shared / uploaded / books), tag — OR within a menu, AND across; counts from `GET /api/cards/facets`; state lives in the URL as comma lists (`?type=thought,link`). Header carries the `+ Add ⌘J` button; sign-out lives at the bottom of Settings.
 3. **Card view:** markdown editor, tags, attachments, backlinks ("appears on boards: ...", "linked from: ...").
 4. **Boards (tldraw):** custom card shapes rendering real card content (thumbnail images, quote styling per type). Placement changes persist to `placements`; tldraw-native scribbles/arrows persist as a snapshot in the board card's `props`. Double-click a board-type card to drill in; breadcrumb trail to navigate back up.
 5. **Graph view:** derived from `edges`. Last priority; skip until everything else is loved.

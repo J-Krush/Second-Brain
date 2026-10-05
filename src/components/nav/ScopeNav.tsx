@@ -42,7 +42,7 @@ export function ScopeNav() {
   }, []);
 
   return (
-    <nav className="flex h-full font-mono text-[11px] uppercase tracking-widest" aria-label="scope">
+    <nav className="flex items-center gap-1 font-mono text-[13px] uppercase tracking-widest" aria-label="scope">
       {SCOPES.map((scope) => {
         const next = new URLSearchParams(onHome ? params : undefined);
         next.delete("card");
@@ -56,7 +56,7 @@ export function ScopeNav() {
             href={qs ? `/?${qs}` : "/"}
             replace={onHome}
             aria-current={active ? "page" : undefined}
-            className={`flex items-center border-b-2 px-3 transition-colors ${
+            className={`flex h-8 items-center border-b-2 px-2 pt-0.5 transition-colors ${
               active ? "border-accent text-ink" : "border-transparent text-ink-faint hover:text-ink"
             }`}
           >

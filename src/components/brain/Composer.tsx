@@ -314,11 +314,11 @@ export function Composer({
         </button>
         <FacetMenu
           name="kind"
-          value={shownKind}
-          clearable={false}
+          values={[shownKind]}
+          multi={false}
           direction="up"
           options={KIND_OPTIONS}
-          onChange={(k) => setKind(k)}
+          onChange={(keys) => setKind(keys[0] ?? null)}
         />
         <span className="ml-auto hidden items-center gap-1.5 sm:flex">
           {over ? (

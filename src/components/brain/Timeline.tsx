@@ -156,7 +156,7 @@ function EntryBody({ card }: { card: BrainCard }) {
     const domain = source.via === "web" ? source.domain : card.url ? new URL(card.url).hostname : "";
     const image = hero?.kind === "og" || hero?.kind === "image" ? hero.fileId : null;
     return (
-      <a href={card.url ?? "#"} target="_blank" rel="noreferrer" className="group/link block">
+      <div className="group/link block">
         {image && (
           <span className="relative mb-4 block">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -175,19 +175,24 @@ function EntryBody({ card }: { card: BrainCard }) {
             )}
           </span>
         )}
-        <span className="flex items-center gap-2 font-mono text-[11px] text-ink-faint">
+        <a
+          href={card.url ?? "#"}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 font-mono text-[11px] text-ink-faint hover:text-cyan"
+        >
           <SiteMark label={domain} className="size-4 text-[9px]" />
-          {domain}
-        </span>
-        <h3 className="mt-1.5 font-display text-xl font-bold leading-snug tracking-tight text-ink group-hover/link:text-cyan">
-          {card.title ?? card.url} <span className="text-cyan">↗</span>
+          {domain} <span className="text-cyan">↗</span>
+        </a>
+        <h3 className="mt-1.5 font-display text-xl font-bold leading-snug tracking-tight text-ink transition-colors group-hover/link:text-accent">
+          {card.title ?? card.url}
         </h3>
         {body && (
           <p className="mt-2 whitespace-pre-line border-l-2 border-line-2 pl-3 text-[14px] leading-relaxed text-ink-dim">
             {body}
           </p>
         )}
-      </a>
+      </div>
     );
   }
 
