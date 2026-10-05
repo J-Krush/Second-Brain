@@ -1,6 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "second-brain",
+  // Personal Cloudflare account. Pinned so no login or env var can send
+  // this project to another account.
+  "account_id": "0fd505c77dd27db649fcf8203474118f",
   "main": "./worker.ts",
   "compatibility_date": "2026-06-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -22,7 +25,7 @@
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      "id": "REPLACE_WITH_HYPERDRIVE_ID",
+      "id": "95b44d1fc8df414e9e306ad5736af9a8",
       "localConnectionString": "postgres://postgres:postgres@localhost:55432/secondbrain"
     }
   ],
@@ -31,11 +34,11 @@
     "crons": ["0 4 * * *", "15 * * * *"]
   },
   // Non-secret config. Secrets (APP_PASSWORD_HASH, SESSION_SECRET, API_TOKEN,
-  // CRON_SECRET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY) are uploaded from the
-  // gitignored .prod.vars with `pnpm cf secret bulk .prod.vars`; `.dev.vars`
-  // holds local values for `pnpm preview`.
+  // CRON_SECRET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY) are GitHub repo secrets
+  // that the deploy workflow ships with each deploy (`--secrets-file`);
+  // `.dev.vars` holds local values for `pnpm preview`.
   "vars": {
-    "R2_ACCOUNT_ID": "REPLACE_WITH_ACCOUNT_ID",
+    "R2_ACCOUNT_ID": "0fd505c77dd27db649fcf8203474118f",
     "R2_BUCKET": "second-brain"
   }
 }

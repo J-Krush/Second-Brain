@@ -239,9 +239,10 @@ CF_AI_TOKEN=             # optional, local dev only; empty = FTS-only search
 CRON_SECRET=             # bearer the Cron Trigger sends to /api/admin/*
 ```
 
-In production, non-secret values live in `wrangler.jsonc` `vars` and secrets
-are uploaded from the gitignored `.prod.vars` with `pnpm cf secret bulk .prod.vars`;
-`.dev.vars` mirrors `.env.local` for `pnpm preview`. `pnpm cf` is wrangler with
+In production, non-secret values live in `wrangler.jsonc` `vars`; secrets are
+GitHub repo secrets that the deploy workflow uploads with every deploy
+(rotate with `gh secret set NAME`, then rerun the workflow). `.dev.vars`
+mirrors `.env.local` for `pnpm preview`. `pnpm cf` is wrangler with
 a project-local login (`.cf-auth/`), separate from any global wrangler login.
 
 ## Deployment
@@ -250,8 +251,10 @@ GitHub Actions (`.github/workflows/deploy.yml`): every PR runs typecheck +
 tests; every push to `main` runs them again, then `pnpm db:migrate` against
 Neon, then builds and deploys the Worker. Migrations run before the new code
 is live, so keep them backward compatible with the deployed version.
-Repo secrets: `CLOUDFLARE_API_TOKEN`, `DATABASE_URL` (Neon direct URL);
-repo variable: `CLOUDFLARE_ACCOUNT_ID`.
+Repo secrets: `CLOUDFLARE_API_TOKEN`, `DATABASE_URL` (Neon direct URL), plus
+the Worker secrets above (`APP_PASSWORD_HASH`, `SESSION_SECRET`, `API_TOKEN`,
+`CRON_SECRET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`). The
+Cloudflare account is pinned by `account_id` in `wrangler.jsonc`.
 
 ## Non-goals (v1)
 

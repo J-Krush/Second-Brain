@@ -39,7 +39,6 @@ jobs:
       cancel-in-progress: false
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -56,5 +55,26 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Build Worker
         run: pnpm exec opennextjs-cloudflare build
+      # Worker secrets live in GitHub and ship with every deploy, so a fresh
+      # Worker is fully configured on its first deploy and rotating one is
+      # just `gh secret set` + rerun. Values are masked in the logs.
       - name: Deploy Worker
-        run: pnpm exec opennextjs-cloudflare deploy
+        run: |
+          umask 077
+          cat > "$RUNNER_TEMP/worker-secrets.env" <<EOF
+          APP_PASSWORD_HASH=${APP_PASSWORD_HASH}
+          SESSION_SECRET=${SESSION_SECRET}
+          API_TOKEN=${API_TOKEN}
+          CRON_SECRET=${CRON_SECRET}
+          R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+          R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+          EOF
+          pnpm exec opennextjs-cloudflare deploy --secrets-file "$RUNNER_TEMP/worker-secrets.env"
+          rm -f "$RUNNER_TEMP/worker-secrets.env"
+        env:
+          APP_PASSWORD_HASH: ${{ secrets.APP_PASSWORD_HASH }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
