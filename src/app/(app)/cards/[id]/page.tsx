@@ -5,6 +5,7 @@ import { TagEditor } from "@/components/TagEditor";
 import { getCardDetail } from "@/lib/cards";
 import { listTags } from "@/lib/tags";
 import { renderMarkdown } from "@/lib/markdown";
+import { requireSession } from "@/lib/page-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export default async function CardPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireSession();
   const { id } = await params;
   const detail = await getCardDetail(id);
   if (!detail) notFound();

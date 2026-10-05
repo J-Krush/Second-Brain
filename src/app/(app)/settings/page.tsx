@@ -1,8 +1,10 @@
 import { AdminActions } from "@/components/AdminActions";
+import { requireSession } from "@/lib/page-auth";
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  await requireSession();
   return (
     <main className="mx-auto max-w-2xl px-6 py-8">
       <h1 className="mb-1 font-display text-2xl font-bold tracking-tight text-ink">Settings</h1>

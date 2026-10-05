@@ -6,6 +6,7 @@ import { cards } from "@/db/schema";
 import { BoardCanvas } from "@/components/board/BoardCanvas";
 import { BoardHeader } from "@/components/board/BoardHeader";
 import { getBoard } from "@/lib/boards";
+import { requireSession } from "@/lib/page-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export default async function BoardPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ trail?: string }>;
 }) {
+  await requireSession();
   const { id } = await params;
   const { trail } = await searchParams;
   const board = await getBoard(id);

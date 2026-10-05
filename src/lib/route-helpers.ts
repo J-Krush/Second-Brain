@@ -4,9 +4,10 @@ import { bearerTokenValid } from "./auth";
 import { SESSION_COOKIE, unsealSession } from "./session";
 
 /**
- * Route-handler authorization. The proxy already redirects browsers without a
- * session and lets any `Bearer ...` request through unchecked, so handlers must
- * validate the token themselves here. Returns true when the caller is allowed.
+ * Route-handler authorization. There is no proxy/middleware in front of API
+ * routes (OpenNext Cloudflare does not run Next's proxy), so every handler
+ * must call this: it accepts a valid Bearer token or a session cookie.
+ * Returns true when the caller is allowed.
  */
 export async function authorize(request: NextRequest): Promise<boolean> {
   const authHeader = request.headers.get("authorization");

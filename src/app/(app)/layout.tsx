@@ -3,8 +3,12 @@ import { CaptureModal } from "@/components/CaptureModal";
 import { LogoutButton } from "@/components/LogoutButton";
 import { SearchPalette } from "@/components/SearchPalette";
 import { ServiceWorker } from "@/components/ServiceWorker";
+import { SessionRefresh } from "@/components/SessionRefresh";
+import { requireSession } from "@/lib/page-auth";
+import { shouldRoll } from "@/lib/session";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const session = await requireSession();
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-20 border-b border-line bg-base/80 backdrop-blur">
@@ -32,6 +36,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <SearchPalette />
       <CaptureModal />
       <ServiceWorker />
+      {shouldRoll(session) && <SessionRefresh />}
     </div>
   );
 }

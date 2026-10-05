@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(result);
 }
 
-// Vercel cron issues GET with the CRON_SECRET bearer.
+// The Cron Trigger (worker.ts `scheduled`) issues GET with the CRON_SECRET bearer.
 export async function GET(request: NextRequest) {
   if (!(await authorize(request))) return unauthorized();
   const result = await runGc();
