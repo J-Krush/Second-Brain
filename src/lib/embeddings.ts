@@ -35,14 +35,11 @@ export function embeddingsConfigured(): boolean {
   return Boolean(aiBinding() || (env.CF_ACCOUNT_ID && env.CF_AI_TOKEN));
 }
 
-export function contentHash(title: string | null, body: string | null): string {
-  return createHash("sha256")
-    .update(`${title ?? ""}\n\n${body ?? ""}`)
-    .digest("hex");
-}
-
-function embedInput(title: string | null, body: string | null): string {
-  return `${title ?? ""}\n\n${body ?? ""}`.trim().slice(0, MAX_CHARS);
+// The note is appended only when present, so cards without one keep the hash
+// they had before notes existed and are not re-embedded.
+function embeddableText(card: { title: string | null; body: string | null; note: string | null }): string {
+  const base = `${card.title ?? ""}\n\n${card.body ?? ""}`;
+  return card.note ? `${base}\n\n${card.note}` : base;
 }
 
 // Response boundary for POST /accounts/{id}/ai/run/@cf/baai/bge-m3.
@@ -97,6 +94,7 @@ export async function embedCard(cardId: string): Promise<void> {
     .select({
       title: cards.title,
       body: cards.body,
+      note: cards.note,
       embeddingHash: cards.embeddingHash,
     })
     .from(cards)
@@ -104,8 +102,9 @@ export async function embedCard(cardId: string): Promise<void> {
     .limit(1);
   if (!card) return;
 
-  const input = embedInput(card.title, card.body);
-  const hash = contentHash(card.title, card.body);
+  const text = embeddableText(card);
+  const input = text.trim().slice(0, MAX_CHARS);
+  const hash = createHash("sha256").update(text).digest("hex");
   if (hash === card.embeddingHash) return; // already current
 
   if (!input) {
@@ -143,7 +142,7 @@ export async function sweepStaleEmbeddings(limit = 100): Promise<number> {
     .where(
       and(
         isNull(cards.deletedAt),
-        sql`length(trim(coalesce(${cards.title},'') || ' ' || coalesce(${cards.body},''))) > 0`,
+        sql`length(trim(concat_ws(' ', ${cards.title}, ${cards.body}, ${cards.note}))) > 0`,
         or(
           isNull(cards.embeddingHash),
           isNull(cards.embeddedAt),

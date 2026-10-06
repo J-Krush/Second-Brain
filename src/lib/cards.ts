@@ -11,6 +11,7 @@ export const cardCols = {
   type: cards.type,
   title: cards.title,
   body: cards.body,
+  note: cards.note,
   url: cards.url,
   props: cards.props,
   createdAt: cards.createdAt,
@@ -26,6 +27,8 @@ export type CardView = {
   type: string;
   title: string | null;
   body: string | null;
+  /** The user's own take on the card, separate from its content. */
+  note: string | null;
   url: string | null;
   props: unknown;
   createdAt: Date;
@@ -50,6 +53,7 @@ export interface CreateCardInput {
   type?: string;
   title?: string | null;
   body?: string | null;
+  note?: string | null;
   url?: string | null;
   props?: Record<string, unknown>;
   /** Filed at capture (e.g. tagged): skips the inbox. */
@@ -64,6 +68,7 @@ export async function createCard(input: CreateCardInput): Promise<CardView> {
       type,
       title: input.title ?? null,
       body: input.body ?? null,
+      note: input.note ?? null,
       url: input.url ?? null,
       props: withSource(input.props ?? {}, input.url ?? null),
       triagedAt: input.triaged ? sql`now()` : null,
@@ -313,6 +318,7 @@ export interface UpdateCardInput {
   type?: string;
   title?: string | null;
   body?: string | null;
+  note?: string | null;
   url?: string | null;
   props?: Record<string, unknown>;
   triaged?: boolean;
@@ -326,6 +332,7 @@ export async function updateCard(
   if (input.type !== undefined && CARD_TYPES[input.type]) patch.type = input.type;
   if (input.title !== undefined) patch.title = input.title;
   if (input.body !== undefined) patch.body = input.body;
+  if (input.note !== undefined) patch.note = input.note;
   if (input.url !== undefined) patch.url = input.url;
   if (input.props !== undefined) patch.props = input.props;
   if (input.triaged !== undefined) patch.triagedAt = input.triaged ? new Date() : null;

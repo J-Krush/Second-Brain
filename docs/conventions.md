@@ -40,7 +40,7 @@ Stack: TypeScript `strict` + `noUncheckedIndexedAccess`, React 19, Next 16 App R
 | `⌘J` | everywhere | Toggle the capture dialog (`⌘N` is browser-reserved) |
 | `⌘K`, `/` | everywhere | Open search |
 | `⌘↵` | capture dialog | Save |
-| `a` / `e` / `b` / `t` / `l` | card modal | Archive (inbox only) / edit / file to board / tag / connect a card |
+| `a` / `e` / `n` / `b` / `t` / `l` | card modal | Archive (inbox only) / edit / note (`⌘↵` or blur saves, `Esc` cancels) / file to board / tag / connect a card |
 | `Esc` | any overlay | Close |
 
 ### Design system

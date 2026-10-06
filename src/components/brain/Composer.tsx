@@ -24,6 +24,7 @@ export interface Draft {
   type: string;
   title: string | null;
   body: string | null;
+  note?: string | null;
   url: string | null;
   props: Record<string, unknown>;
   tagIds?: number[];
@@ -47,7 +48,7 @@ interface QuoteFields {
  * 2. Quote mode (the kind picker set to quote): type `quote`, the rest is the
  *    quote, author/work/page go to `props.source = {via:"book"}`.
  * 3. Otherwise, if the rest starts with an http(s) URL: type `link`, that URL,
- *    body = whatever follows (or null).
+ *    note = whatever follows (or null).
  * 4. Attachments append `![name](file:<id>)` to the body. With no text at all,
  *    `props.source = {via:"upload", filename}` of the first file, a single file
  *    names the card, and an all-non-image upload is a `document`.
@@ -66,6 +67,7 @@ export function buildDraft(text: string, files: Uploaded[], quote: QuoteFields |
 
   let type = "thought";
   let url: string | null = null;
+  let note: string | null = null;
   const props: Record<string, unknown> = {};
   if (quote) {
     if (!rest) return null;
@@ -80,13 +82,14 @@ export function buildDraft(text: string, files: Uploaded[], quote: QuoteFields |
     if (m && URL.canParse(m[1]!)) {
       type = "link";
       url = m[1]!;
-      rest = rest.slice(m[0].length).trim();
+      note = rest.slice(m[0].length).trim() || null;
+      rest = "";
     }
   }
 
   const embeds = files.map((f) => `![${f.name.replace(/[[\]]/g, "")}](file:${f.fileId})`).join("\n");
   const body = [rest, embeds].filter(Boolean).join("\n\n") || null;
-  if (!title && !body && !url) return null;
+  if (!title && !body && !url && !note) return null;
 
   if (!text.trim() && files.length > 0) {
     props.source = { via: "upload", filename: files[0]!.name } satisfies Source;
@@ -94,7 +97,7 @@ export function buildDraft(text: string, files: Uploaded[], quote: QuoteFields |
     if (files.every((f) => !f.mime.startsWith("image/"))) type = "document";
   }
   if (kind) type = kind;
-  return { type, title, body, url, props };
+  return { type, title, body, note, url, props };
 }
 
 /** POST a draft; returns the new card and broadcasts the change. */
@@ -145,6 +148,8 @@ export function Composer({
   const [kind, setKind] = useState<string | null>(null);
   // Citation survives switching kinds back and forth; it is only sent while the kind is quote.
   const [cite, setCite] = useState<QuoteFields>({ author: "", work: "", page: "" });
+  // null = note field hidden. Text after a pasted URL is also a note; the two are joined on capture.
+  const [note, setNote] = useState<string | null>(null);
   const [tags, setTags] = useState<CardTag[]>([]);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -180,10 +185,12 @@ export function Composer({
     if (!draft || busy || uploading) return;
     setBusy(true);
     try {
-      const card = await postCard({ ...draft, tagIds: tags.map((t) => t.id) });
+      const fullNote = [draft.note, note?.trim()].filter(Boolean).join("\n\n") || null;
+      const card = await postCard({ ...draft, note: fullNote, tagIds: tags.map((t) => t.id) });
       setText("");
       setFiles([]);
       setCite({ author: "", work: "", page: "" });
+      setNote(null);
       setKind(null);
       setTags([]);
       onCaptured(card);
@@ -286,6 +293,17 @@ export function Composer({
         </ul>
       )}
 
+      {note !== null && (
+        <textarea
+          autoFocus
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={2}
+          placeholder="Your take: why it matters, what you think…"
+          className="sb-fade mx-4 mt-2 block w-[calc(100%-2rem)] resize-y rounded-md border-l-2 border-line-2 bg-inset px-3 py-2 text-[13px] text-ink-dim outline-none placeholder:text-ink-faint"
+        />
+      )}
+
       <div className="mx-4 mt-2">
         <TagPicker
           value={tags}
@@ -321,6 +339,14 @@ export function Composer({
             }}
           />
         </label>
+        <button
+          type="button"
+          aria-pressed={note !== null}
+          onClick={() => setNote(note === null ? "" : null)}
+          className={`rounded px-2 py-1 hover:bg-surface-2 ${note !== null ? "text-ink" : "hover:text-ink"}`}
+        >
+          ✎ note
+        </button>
         <FacetMenu
           name="kind"
           values={[shownKind]}

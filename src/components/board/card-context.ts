@@ -5,6 +5,8 @@ export interface BoardCard {
   type: string;
   title: string | null;
   body: string | null;
+  /** Absent on cards that came from a search hit rather than the board load. */
+  note?: string | null;
   url: string | null;
   props: unknown;
 }

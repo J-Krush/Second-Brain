@@ -86,6 +86,12 @@ Attaching tags is the one "choose from N" surface that is not `FacetMenu`: it mu
 
 `/tags` renames and deletes. Renaming onto an existing name (case-insensitive) merges rather than erroring: duplicates like `prepping`/`Prepping` are the main reason to rename. The merge is one SQL statement (data-modifying CTEs) because the codebase has no transactions.
 
+### D22 · Every card has a separate `note`
+
+`body` is the card's content: the thought, the quote's words, a document's text. What the user thinks about it had nowhere to go except into that same field, which for a quote corrupts the quotation. `cards.note` holds the user's take for every type. It renders as the grey-bar line under any entry, is edited in place in the card modal (`n`), can be added from `⌘J` (`✎ note`), and is part of search (tsvector weight B) and the embedding input.
+
+For links the composer's "text after the URL" and the share target's shared text now go to `note`, not `body`. Migration `0004` moves existing link/video bodies into `note`, except bodies with `file:` embeds, since inline file refs are synced from `body` only and moving them would let GC collect the images. Between that migration and the Worker deploy, the old Worker shows those links without their text; nothing is lost. The embedding hash only includes the note when there is one, so existing cards don't all re-embed.
+
 ## Testing and tooling
 
 ### D18 · Small pure test suite, mandatory manual smoke

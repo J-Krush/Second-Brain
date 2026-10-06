@@ -49,6 +49,7 @@ export const cards = pgTable(
     type: text("type").notNull(),
     title: text("title"),
     body: text("body"),
+    note: text("note"),
     url: text("url"),
     props: jsonb("props").notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true })

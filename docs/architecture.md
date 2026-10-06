@@ -34,7 +34,7 @@ Everything is a row in `cards` with a `type` (`thought`, `quote`, `link`, `video
 ## Capture path
 
 1. `POST /api/cards` (browser composer, share target, or bearer client) validates with zod, inserts the card, stamps `props.source` (`typed` / `web:<domain>` / `share` / `upload` / `book`), and syncs `file_refs` from `![](file:UUID)` embeds in the body.
-2. `after()`: if it is a link, `captureLink` fetches the page, parses OpenGraph (or, for hosts in `OEMBED_ENDPOINT` such as YouTube, asks their oEmbed endpoint), downloads the image into R2 as a file with an `og_cache` ref, and writes metadata into `props`. The title is filled when empty or still equal to the previous auto-filled one. Then `embedCard` hashes `title + body`, skips if unchanged, otherwise embeds and stores the vector.
+2. `after()`: if it is a link, `captureLink` fetches the page, parses OpenGraph (or, for hosts in `OEMBED_ENDPOINT` such as YouTube, asks their oEmbed endpoint), downloads the image into R2 as a file with an `og_cache` ref, and writes metadata into `props`. The title is filled when empty or still equal to the previous auto-filled one. Then `embedCard` hashes `title + body` (+ `note` when set), skips if unchanged, otherwise embeds and stores the vector.
 3. The browser emits a `card-changed` window event (`src/lib/card-events.ts`); the stream, inbox count, and facet counts refetch.
 
 ## Files
@@ -46,7 +46,7 @@ Upload is client-driven and dedupes on content hash: the client computes sha256 
 `GET /api/search?q=&mode=quick|fts|semantic|hybrid` (`src/lib/search.ts`):
 
 - **quick** — `word_similarity` on `title` (pg_trgm), threshold 0.2; typo-tolerant as-you-type.
-- **fts** — `websearch_to_tsquery` against the generated `search` tsvector, `ts_rank`, title weighted A over body B.
+- **fts** — `websearch_to_tsquery` against the generated `search` tsvector, `ts_rank`, title weighted A over body and note B.
 - **semantic** — cosine distance over `embedding` using the HNSW index; 503 if no embedding provider is configured.
 - **hybrid** (default) — fts and semantic in parallel, merged with reciprocal rank fusion (`src/lib/rrf.ts`, k = 60). Returns `degraded: true` when it had to fall back to fts alone; the UI shows an amber note.
 
