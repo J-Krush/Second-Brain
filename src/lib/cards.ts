@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cardTags, cards, edges, fileRefs, files, placements, tags } from "@/db/schema";
 import { syncInlineRefs } from "./filerefs";
-import { sourceFacetLabel, sourceOf, type SourceFilter } from "./source";
+import { sourceOf, type SourceFilter } from "./source";
 
 // Columns safe to ship to the client: excludes the 1024-float `embedding` and
 // the internal generated `search` tsvector. Used for every read + returning().
@@ -233,29 +233,18 @@ export async function listCards(params: ListParams): Promise<ListResult> {
 
 export interface Facets {
   kinds: { type: string; count: number }[];
-  sources: { key: string; label: string; via: SourceFilter["via"]; domain: string | null; count: number }[];
   tags: { id: number; name: string; color: string | null; count: number }[];
 }
 
 /** Counts behind the filter menus, scoped to inbox or library only. */
 export async function listFacets(view: ListParams["view"]): Promise<Facets> {
   const where = and(...scopeFilters(view));
-  const [kindRows, sourceRows, tagRows] = await Promise.all([
+  const [kindRows, tagRows] = await Promise.all([
     db
       .select({ type: cards.type, count: sql<number>`count(*)::int` })
       .from(cards)
       .where(where)
       .groupBy(cards.type)
-      .orderBy(desc(sql`count(*)`)),
-    db
-      .select({
-        via: sql<string | null>`${cards.props} #>> '{source,via}'`,
-        domain: sql<string | null>`CASE WHEN ${cards.props} #>> '{source,via}' = 'web' THEN ${cards.props} #>> '{source,domain}' END`,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(cards)
-      .where(where)
-      .groupBy(sql`1`, sql`2`)
       .orderBy(desc(sql`count(*)`)),
     // Every tag, counted within scope: a zero-count tag stays pickable.
     db
@@ -266,26 +255,7 @@ export async function listFacets(view: ListParams["view"]): Promise<Facets> {
       .groupBy(tags.id)
       .orderBy(asc(tags.name)),
   ]);
-  const sources: Facets["sources"] = [];
-  for (const row of sourceRows) {
-    const filter: SourceFilter | null =
-      row.via === "web"
-        ? row.domain
-          ? { via: "web", domain: row.domain }
-          : null
-        : row.via === "typed" || row.via === "share" || row.via === "upload" || row.via === "book"
-          ? { via: row.via }
-          : null;
-    if (!filter) continue;
-    sources.push({
-      key: filter.via === "web" ? `web:${filter.domain}` : filter.via,
-      label: sourceFacetLabel(filter),
-      via: filter.via,
-      domain: filter.via === "web" ? filter.domain : null,
-      count: row.count,
-    });
-  }
-  return { kinds: kindRows.filter((k) => CARD_TYPES[k.type]), sources, tags: tagRows };
+  return { kinds: kindRows.filter((k) => CARD_TYPES[k.type]), tags: tagRows };
 }
 
 export interface CardDetail {

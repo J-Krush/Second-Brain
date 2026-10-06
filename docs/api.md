@@ -32,9 +32,9 @@ curl -X POST https://<your-worker>/api/cards \
 | Method | Path | Body / query | Notes |
 | --- | --- | --- | --- |
 | `POST` | `/api/cards` | `{ type?, title?, body?, url?, props?, tagIds? }` | `type` defaults to `thought`; unknown types are rejected. To capture a link send `type: "link"` and `url` (the browser composer derives these from a leading URL; the API does not). `tagIds` (≤ 64) attaches existing tags (unknown ids are skipped) and files the card straight to the library (`triaged_at` set), same as tagging later. Server stamps `props.source`, syncs inline file refs, then `after()` runs OG capture (links) and embedding. `201 { card }` |
-| `GET` | `/api/cards` | `?view=inbox\|library&type=a,b&source=k1,k2&tag=1,2&order=asc\|desc&cursor=` | Keyset pagination on `(created_at, id)`; `nextCursor` is `"<iso>\|<uuid>"`. Filters are comma lists, OR within a key, AND across. Source keys: `typed`, `share`, `upload`, `book`, `web:<domain>` |
+| `GET` | `/api/cards` | `?view=inbox\|library&type=a,b&source=k1,k2&tag=1,2&order=asc\|desc&cursor=` | Keyset pagination on `(created_at, id)`; `nextCursor` is `"<iso>\|<uuid>"`. Filters are comma lists, OR within a key, AND across. Source keys: `typed`, `share`, `upload`, `book`, `web:<domain>` (API only; the web UI has no source filter) |
 | `GET` | `/api/cards/count` | — | `{ inbox }` exact untriaged count |
-| `GET` | `/api/cards/facets` | `?view=inbox\|library` | `{ kinds: [{type,count}], sources: [{key,label,via,domain,count}], tags: [{id,name,color,count}] }` scoped to the view only. `tags` lists every tag, including ones with no cards in the view (`count: 0`) |
+| `GET` | `/api/cards/facets` | `?view=inbox\|library` | `{ kinds: [{type,count}], tags: [{id,name,color,count}] }` scoped to the view only. `tags` lists every tag, including ones with no cards in the view (`count: 0`) |
 | `GET` | `/api/cards/:id` | — | `{ card, tags, files, boards, links, backlinks }` — boards it appears on, outgoing edges, incoming edges |
 | `PATCH` | `/api/cards/:id` | `{ type?, title?, body?, url?, props?, triaged? }` | Partial. `triaged: true/false` sets/clears `triaged_at`. Re-syncs refs; re-embeds when `title`/`body` are present; re-captures OG for links when `url` or `type` are present |
 | `DELETE` | `/api/cards/:id` | — | Soft delete (`deleted_at`); GC hard-deletes after 30 days |

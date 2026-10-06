@@ -56,11 +56,11 @@ Inbox and library are the same `/` page (`?scope=`), as a timeline or desk (`?vi
 
 ### D12 · Triage is a timestamp, not a folder (migration `0002`)
 
-The inbox is `triaged_at IS NULL`. Tagging a card, placing it on a board, or creating a board auto-triages; `e` in the modal archives explicitly. The backfill treated anything already tagged/placed/a board as triaged. This keeps "capture never requires a location" true while giving the inbox a way to empty.
+The inbox is `triaged_at IS NULL`. Tagging a card, placing it on a board, or creating a board auto-triages; `a` in the modal archives explicitly. The backfill treated anything already tagged/placed/a board as triaged. This keeps "capture never requires a location" true while giving the inbox a way to empty.
 
 ### D13 · Provenance lives in `props.source` and is filterable in SQL (migration `0003`)
 
-`sourceOf()` (`src/lib/source.ts`) resolves a card's origin — `typed`, `web` (+ domain), `share`, `upload`, `book` (+ author/work/page). It started as a display-only derivation; making source a real library filter required it to be queryable, so `0003` backfilled `props.source` for every existing card (domain from URL, else typed) and `createCard` stamps it going forward. Facet keys are `web:<domain>` or the bare channel.
+`sourceOf()` (`src/lib/source.ts`) resolves a card's origin — `typed`, `web` (+ domain), `share`, `upload`, `book` (+ author/work/page). It started as a display-only derivation; making source a real library filter required it to be queryable, so `0003` backfilled `props.source` for every existing card (domain from URL, else typed) and `createCard` stamps it going forward. Facet keys are `web:<domain>` or the bare channel. Later demoted: in practice nobody filtered by it, so the web UI dropped the source menu and the per-entry provenance line (entries show their kind instead). Source now appears only in the card modal; `GET /api/cards?source=` still filters.
 
 ### D14 · Capture is a `⌘J` dialog, not an inline form
 
@@ -68,7 +68,7 @@ The first header iteration kept a composer at the top of the stream; it dominate
 
 ### D15 · One filter control, multi-select, OR within / AND across
 
-The library briefly had two filter systems (a kind-pill row and a source shelf inside the Desk). They were replaced by a single `FacetMenu` used for kind, source, and tag, with counts from `GET /api/cards/facets` (scoped to inbox/library, not to the other active filters, so counts never collapse to the current selection). Values within one menu are OR'd; menus are AND'd. The same component in single mode is the composer's kind picker, so every "choose from N" surface reads the same.
+The library briefly had two filter systems (a kind-pill row and a source shelf inside the Desk). They were replaced by a single `FacetMenu` used for kind and tag (source was a third menu until D13's demotion), with counts from `GET /api/cards/facets` (scoped to inbox/library, not to the other active filters, so counts never collapse to the current selection). Values within one menu are OR'd; menus are AND'd. The same component in single mode is the composer's kind picker, so every "choose from N" surface reads the same.
 
 ### D16 · Overlays are portaled to `document.body`
 

@@ -67,23 +67,6 @@ export function sourceOf(card: { props: unknown; url: string | null }): Source {
   return { via: "typed" };
 }
 
-export function sourceLabel(s: Source): string {
-  switch (s.via) {
-    case "typed":
-      return "typed";
-    case "web":
-      return s.domain;
-    case "share":
-      return s.app ? `shared from ${s.app}` : "shared";
-    case "upload":
-      return s.filename;
-    case "book": {
-      const head = [s.author, s.work].filter(Boolean).join(", ") || "book";
-      return s.page ? `${head} p.${s.page}` : head;
-    }
-  }
-}
-
 /**
  * Facet identity for filtering: web sources group by domain (`web:<domain>`),
  * everything else by how it arrived. Mirrors the SQL in `listCards`.
@@ -100,20 +83,4 @@ export function parseSourceKey(key: string): SourceFilter | null {
     return domain ? { via: "web", domain } : null;
   }
   return key === "typed" || key === "share" || key === "upload" || key === "book" ? { via: key } : null;
-}
-
-/** Short label for a source facet, as opposed to a card's full provenance line. */
-export function sourceFacetLabel(f: SourceFilter): string {
-  switch (f.via) {
-    case "web":
-      return f.domain;
-    case "typed":
-      return "typed";
-    case "share":
-      return "shared";
-    case "upload":
-      return "uploaded";
-    case "book":
-      return "books";
-  }
 }
