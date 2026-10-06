@@ -38,7 +38,7 @@ iOS Safari does not implement the web app manifest's `share_target` ([WebKit bug
 
 4. **Pin it.** Open any share sheet → scroll the action row → *Edit Actions…* → add *Send to Brain* to Favorites so it sits at the top.
 
-5. **Home-screen app.** In Safari, open the brain → Share → *Add to Home Screen*. The icon launches standalone into the capture dialog (`start_url` is `/?capture=1`).
+5. **Home-screen app.** In Safari, open the brain → Share → *Add to Home Screen*. It runs full-screen (no Safari chrome; `viewport-fit=cover` plus safe-area padding keep the header out from under the clock) and cold-launches into the capture dialog (`start_url` is `/?capture=1`; change that one line in `public/manifest.webmanifest` to `/` for a plain inbox). The installed app has its own cookie jar, so log in once more there. When you come back to it after 30 s away, `ResumeRefresh` refetches the inbox, counts, and facets, so a card saved from the share sheet is already there. Fields are at least 16px on touch devices so iOS never zooms in on focus. There is no offline mode by design (`public/sw.js` is network passthrough).
 
 What the Shortcut does (`docs/shortcuts/send-to-brain.plist` is the source; change it there, not only on your phone):
 
