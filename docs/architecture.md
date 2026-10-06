@@ -34,7 +34,7 @@ Everything is a row in `cards` with a `type` (`thought`, `quote`, `link`, `video
 ## Capture path
 
 1. `POST /api/cards` (browser composer or bearer client) or `POST /api/share` (Android share target, iOS Shortcut) validates, canonicalises the URL (`src/lib/link-url.ts`), inserts the card, stamps `props.source` (`typed` / `web:<domain>` / `share` / `upload` / `book`), and syncs `file_refs` from `![](file:UUID)` embeds in the body. `/api/share` returns an existing card with the same canonical URL instead of inserting.
-2. `after()`: if it is a link, `captureLink` gets a preview — YouTube's oEmbed for YouTube, nothing for Instagram (login wall), OpenGraph from the page otherwise — downloads the image into R2 as a file with an `og_cache` ref, and writes metadata into `props`. Then `embedCard` hashes `title + body`, skips if unchanged, otherwise embeds and stores the vector.
+2. `after()`: if it is a link, `captureLink` gets a preview — YouTube's oEmbed for YouTube, nothing for Instagram (login wall), OpenGraph from the page otherwise — downloads the image into R2 as a file with an `og_cache` ref, and writes metadata into `props`. The title is filled when empty or still equal to the previous auto-filled one. Then `embedCard` hashes `title + body`, skips if unchanged, otherwise embeds and stores the vector.
 3. The browser emits a `card-changed` window event (`src/lib/card-events.ts`); the stream, inbox count, and facet counts refetch.
 
 ## Files

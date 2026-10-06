@@ -138,10 +138,12 @@ export async function captureLink(cardId: string, url: string): Promise<void> {
       .from(cards)
       .where(eq(cards.id, cardId))
       .limit(1);
-    const props = { ...((row?.props as Record<string, unknown>) ?? {}), og };
-    // Only auto-fill the title when the card doesn't already have one.
+    const existing = (row?.props as { og?: OgData } | undefined) ?? {};
+    const props = { ...existing, og };
+    // Fill the title when the card has none or still carries the previous auto-filled one, so a
+    // re-capture fixes a bad preview title but never overwrites a title the user typed.
     const patch: { props: Record<string, unknown>; title?: string } = { props };
-    if (!row?.title && og.title) patch.title = og.title;
+    if (og.title && (!row?.title || row.title === existing.og?.title)) patch.title = og.title;
     await db.update(cards).set(patch).where(eq(cards.id, cardId));
   } catch {
     // Network/parse failures leave the card intact without a preview.
