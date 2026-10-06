@@ -28,6 +28,10 @@ export const metadata: Metadata = {
   title: "Second Brain",
   description: "A personal, self-owned knowledge base.",
   manifest: "/manifest.webmanifest",
+  // iOS ignores most of the manifest: it needs these to install standalone
+  // with an icon and a dark status bar.
+  appleWebApp: { capable: true, title: "Brain", statusBarStyle: "black-translucent" },
+  icons: { apple: "/apple-icon.png" },
 };
 
 export const viewport: Viewport = {

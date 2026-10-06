@@ -65,6 +65,7 @@ jobs:
           APP_PASSWORD_HASH=${APP_PASSWORD_HASH}
           SESSION_SECRET=${SESSION_SECRET}
           API_TOKEN=${API_TOKEN}
+          CAPTURE_TOKEN=${CAPTURE_TOKEN}
           CRON_SECRET=${CRON_SECRET}
           R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
           R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
@@ -75,6 +76,7 @@ jobs:
           APP_PASSWORD_HASH: ${{ secrets.APP_PASSWORD_HASH }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
+          CAPTURE_TOKEN: ${{ secrets.CAPTURE_TOKEN }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

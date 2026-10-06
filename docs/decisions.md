@@ -86,6 +86,10 @@ The pipeline (retrieval → numbered passages → citations) is fixed in `src/li
 
 Model, retrieval mode, passage count and length, answer length, temperature and the system prompt are a JSON document in a `settings` table (one row per feature, zod schema fills defaults), edited on `/settings` with a live cost strip. Env would have meant a redeploy per experiment; this is the one place in the app where knobs change weekly. The cost strip exists because the knobs trade quality for neurons and the price of a change should be visible before it lands. Workers AI is the first provider because the binding already exists (zero config in prod) and the free 10k neurons/day covers ~50 questions on gpt-oss-120b; the PUT patch schema is built without defaults because `.partial()` on a defaulted zod object still fills them in and would silently reset every knob the patch didn't mention.
 
+### D23 · iOS capture is a Shortcut, not the PWA share target
+
+iOS Safari does not implement the manifest `share_target` ([WebKit 194593](https://webkit.org/b/194593)), so the PWA never appears in the iOS share sheet. Capture from iPhone apps goes through an Apple Shortcut (`docs/shortcuts/send-to-brain.plist`, see [`ingestion.md`](ingestion.md)) that posts to `/api/share` with `Accept: application/json`; a native Share Extension was rejected as an Xcode project plus a developer account for one user. Because that token lives on a phone, it is a separate `CAPTURE_TOKEN` that `authorize(request, "capture")` accepts only on the two create routes — never `API_TOKEN`. Share sheets append tracking params, so `canonicalUrl()` normalises every saved URL and `/api/share` returns the existing card instead of a duplicate. Cost: a second secret to rotate, and the Shortcut's source of truth is a plist rather than something the phone edits back.
+
 ## Testing and tooling
 
 ### D18 · Small pure test suite, mandatory manual smoke

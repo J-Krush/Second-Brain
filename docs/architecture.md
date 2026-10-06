@@ -4,7 +4,7 @@ One Next.js 16 app, deployed as a single Cloudflare Worker, in front of a Postgr
 
 ```mermaid
 flowchart LR
-  B[Browser / PWA share sheet / bearer client] -->|HTTPS| W[Cloudflare Worker<br/>Next.js via OpenNext]
+  B[Browser / PWA share sheet / iOS Shortcut / bearer client] -->|HTTPS| W[Cloudflare Worker<br/>Next.js via OpenNext]
   W -->|HYPERDRIVE binding<br/>pg driver, per-request pool| N[(Neon Postgres<br/>pgvector · pg_trgm)]
   W -->|S3 API, presigned URLs| R2[(R2 bucket<br/>private)]
   W -->|IMAGES binding| IMG[Cloudflare Images<br/>webp thumbnails]
@@ -19,7 +19,7 @@ flowchart LR
 | --- | --- | --- |
 | Entry | `worker.ts` | OpenNext's generated handler plus a `scheduled()` export that maps each cron expression to an internal `GET /api/admin/*` call carrying `CRON_SECRET` |
 | Pages | `src/app/(app)/*` | All `force-dynamic`. Each page calls `requireSession()` itself — **there is no middleware**; OpenNext on Workers does not run `proxy.ts`/`middleware.ts`, so auth is explicit per page and per route |
-| API | `src/app/api/**/route.ts` | Route handlers; every one except `POST /api/auth/login` starts with `authorize()`, which accepts the session cookie or `Authorization: Bearer <API_TOKEN or CRON_SECRET>`. Both bearer tokens are full-access — the distinction is who holds them, not what they can do |
+| API | `src/app/api/**/route.ts` | Route handlers; every one except `POST /api/auth/login` starts with `authorize()`, which accepts the session cookie or `Authorization: Bearer <API_TOKEN or CRON_SECRET>` (full access). `authorize(request, "capture")` on the two create routes also accepts the create-only `CAPTURE_TOKEN` |
 | DB | `src/db/index.ts` | Drizzle over `pg`. A **pool per request context** (keyed on the OpenNext `ExecutionContext` in a `WeakMap`), because Workers forbid reusing a socket across requests. Hyperdrive keeps Neon warm so per-request connects are cheap. Falls back to `DATABASE_URL` for scripts, tests, and `next dev` |
 | Schema | `src/db/*.sql` + `src/db/schema.ts` | Raw SQL migrations are the source of truth; the Drizzle schema mirrors them for typed queries. `scripts/migrate.ts` applies files alphabetically, tracked in `_migrations` |
 | Object storage | `src/lib/r2.ts` | `aws4fetch` against the S3 API, path-style URLs. `R2_ENDPOINT` overrides the derived Cloudflare endpoint so MinIO (or any S3) is a drop-in |
@@ -33,8 +33,8 @@ Everything is a row in `cards` with a `type` (`thought`, `quote`, `link`, `video
 
 ## Capture path
 
-1. `POST /api/cards` (browser composer, share target, or bearer client) validates with zod, inserts the card, stamps `props.source` (`typed` / `web:<domain>` / `share` / `upload` / `book`), and syncs `file_refs` from `![](file:UUID)` embeds in the body.
-2. `after()`: if it is a link, `captureLink` fetches the page, parses OpenGraph, downloads the image into R2 as a file with an `og_cache` ref, and writes metadata into `props`. Then `embedCard` hashes `title + body`, skips if unchanged, otherwise embeds and stores the vector.
+1. `POST /api/cards` (browser composer or bearer client) or `POST /api/share` (Android share target, iOS Shortcut) validates, canonicalises the URL (`src/lib/link-url.ts`), inserts the card, stamps `props.source` (`typed` / `web:<domain>` / `share` / `upload` / `book`), and syncs `file_refs` from `![](file:UUID)` embeds in the body. `/api/share` returns an existing card with the same canonical URL instead of inserting.
+2. `after()`: if it is a link, `captureLink` gets a preview — YouTube's oEmbed for YouTube, nothing for Instagram (login wall), OpenGraph from the page otherwise — downloads the image into R2 as a file with an `og_cache` ref, and writes metadata into `props`. Then `embedCard` hashes `title + body`, skips if unchanged, otherwise embeds and stores the vector.
 3. The browser emits a `card-changed` window event (`src/lib/card-events.ts`); the stream, inbox count, and facet counts refetch.
 
 ## Files

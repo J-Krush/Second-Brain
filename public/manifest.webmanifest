@@ -2,7 +2,7 @@
   "name": "Second Brain",
   "short_name": "Brain",
   "description": "A personal, self-owned knowledge base.",
-  "start_url": "/",
+  "start_url": "/?capture=1",
   "scope": "/",
   "display": "standalone",
   "background_color": "#14130f",
