@@ -44,8 +44,8 @@ interface QuoteFields {
 /**
  * Composer text → card payload. Rules, in order:
  * 1. First line `# Title` becomes the title (removed from the body).
- * 2. Quote mode: type `quote`, the rest is the quote, author/work/page go to
- *    `props.source = {via:"book"}`.
+ * 2. Quote mode (the kind picker set to quote): type `quote`, the rest is the
+ *    quote, author/work/page go to `props.source = {via:"book"}`.
  * 3. Otherwise, if the rest starts with an http(s) URL: type `link`, that URL,
  *    body = whatever follows (or null).
  * 4. Attachments append `![name](file:<id>)` to the body. With no text at all,
@@ -142,8 +142,9 @@ export function Composer({
 }) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Attachment[]>([]);
-  const [quote, setQuote] = useState<QuoteFields | null>(null);
   const [kind, setKind] = useState<string | null>(null);
+  // Citation survives switching kinds back and forth; it is only sent while the kind is quote.
+  const [cite, setCite] = useState<QuoteFields>({ author: "", work: "", page: "" });
   const [tags, setTags] = useState<CardTag[]>([]);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -152,7 +153,8 @@ export function Composer({
   const uploading = files.some((f) => !f.fileId && !f.failed);
   const preview = buildDraft(text, [], null);
   const host = preview?.url ? new URL(preview.url).hostname.replace(/^www\./, "") : null;
-  const draft = buildDraft(text, uploaded, quote, kind);
+  const quoting = kind === "quote";
+  const draft = buildDraft(text, uploaded, quoting ? cite : null, kind);
   const ready = !busy && !uploading && draft !== null;
   // What the picker shows when nothing is forced: the inferred kind.
   const shownKind = kind ?? draft?.type ?? preview?.type ?? "thought";
@@ -181,7 +183,7 @@ export function Composer({
       const card = await postCard({ ...draft, tagIds: tags.map((t) => t.id) });
       setText("");
       setFiles([]);
-      setQuote(null);
+      setCite({ author: "", work: "", page: "" });
       setKind(null);
       setTags([]);
       onCaptured(card);
@@ -219,7 +221,7 @@ export function Composer({
       className={`relative rounded-xl border transition-colors ${over ? "border-dashed border-accent bg-accent/5" : "border-transparent"}`}
     >
       <div className="flex gap-3 px-4 pt-3">
-        <span className="pt-0.5 font-mono text-accent">{quote ? "“" : ">"}</span>
+        <span className="pt-0.5 font-mono text-accent">{quoting ? "“" : ">"}</span>
         <textarea
           data-composer
           autoFocus
@@ -227,19 +229,19 @@ export function Composer({
           onChange={(e) => setText(e.target.value)}
           rows={Math.min(10, Math.max(3, lines))}
           placeholder={
-            quote ? "The quote…" : "What's on your mind? Paste a link, drop a file, or just type. # Title on line one."
+            quoting ? "The quote…" : "What's on your mind? Paste a link, drop a file, or just type. # Title on line one."
           }
           className="min-h-[1.75rem] flex-1 resize-none bg-transparent text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-faint"
         />
       </div>
 
-      {quote && (
+      {quoting && (
         <div className="sb-fade mx-4 mt-2 grid grid-cols-[1fr_1fr_5rem] gap-2 font-mono text-[12px]">
           {(["author", "work", "page"] as const).map((k) => (
             <input
               key={k}
-              value={quote[k]}
-              onChange={(e) => setQuote({ ...quote, [k]: e.target.value })}
+              value={cite[k]}
+              onChange={(e) => setCite({ ...cite, [k]: e.target.value })}
               placeholder={k}
               className="rounded-md border border-line bg-inset px-2.5 py-1.5 text-ink outline-none placeholder:text-ink-faint focus:border-line-2"
             />
@@ -247,7 +249,7 @@ export function Composer({
         </div>
       )}
 
-      {host && !quote && (
+      {host && !quoting && (
         <div className="sb-fade mx-4 mt-2 flex items-center gap-2.5 rounded-md bg-inset px-3 py-2">
           <SiteMark label={host} />
           <span className="font-mono text-[11px] text-ink-dim">{host}</span>
@@ -319,14 +321,6 @@ export function Composer({
             }}
           />
         </label>
-        <button
-          type="button"
-          aria-pressed={!!quote}
-          onClick={() => setQuote(quote ? null : { author: "", work: "", page: "" })}
-          className={`rounded px-2 py-1 hover:bg-surface-2 ${quote ? "bg-accent/10 text-accent" : "hover:text-accent"}`}
-        >
-          “ quote
-        </button>
         <FacetMenu
           name="kind"
           values={[shownKind]}
