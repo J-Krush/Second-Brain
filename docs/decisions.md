@@ -80,7 +80,11 @@ Clicking anywhere on a link card used to leave the site. Now the card body opens
 
 ### D20 · `/ask` is retrieval first, model second
 
-The pipeline (hybrid retrieval → numbered passages → citations) is fixed in `src/lib/ask.ts`; the model is an `LlmProvider` behind `src/lib/llm.ts` chosen by `LLM_PROVIDER`, and nothing else in the app imports a vendor SDK. Consequences: the page is useful with no model at all (it shows what a model would read, which is also how you debug retrieval), swapping vendors is one registry entry, and the UI contract (NDJSON `sources` → `delta` → `done`) never changes. Finding along the way: `websearch_to_tsquery` ANDs terms, so a question like "what do I know about Hyperdrive" returned nothing because no card contains "know"; retrieval uses `match: "any"` (lexemes ORed, `ts_rank` orders by how many hit) while the search box keeps AND semantics.
+The pipeline (retrieval → numbered passages → citations) is fixed in `src/lib/ask.ts`; the model is an `LlmProvider` behind `src/lib/llm.ts`, and nothing else in the app imports a vendor SDK. Consequences: the page is useful with no model at all (it shows what a model would read, which is also how you debug retrieval), swapping vendors is one registry entry, and the UI contract (NDJSON `sources` → `delta` → `done`) never changes. Finding along the way: `websearch_to_tsquery` ANDs terms, so a question like "what do I know about Hyperdrive" returned nothing because no card contains "know"; retrieval uses `match: "any"` (lexemes ORed, `ts_rank` orders by how many hit) while the search box keeps AND semantics.
+
+### D21 · Ask is tuned from the UI, not from env (migration `0004`)
+
+Model, retrieval mode, passage count and length, answer length, temperature and the system prompt are a JSON document in a `settings` table (one row per feature, zod schema fills defaults), edited on `/settings` with a live cost strip. Env would have meant a redeploy per experiment; this is the one place in the app where knobs change weekly. The cost strip exists because the knobs trade quality for neurons and the price of a change should be visible before it lands. Workers AI is the first provider because the binding already exists (zero config in prod) and the free 10k neurons/day covers ~50 questions on gpt-oss-120b; the PUT patch schema is built without defaults because `.partial()` on a defaulted zod object still fills them in and would silently reset every knob the patch didn't mention.
 
 ## Testing and tooling
 

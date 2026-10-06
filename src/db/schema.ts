@@ -177,6 +177,13 @@ export const loginAttempts = pgTable(
   (t) => [primaryKey({ columns: [t.ip, t.windowStart] })],
 );
 
+// Per-feature settings documents; see src/lib/settings.ts.
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type Card = typeof cards.$inferSelect;
 export type NewCard = typeof cards.$inferInsert;
 export type Placement = typeof placements.$inferSelect;

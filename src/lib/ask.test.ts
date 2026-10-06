@@ -37,14 +37,15 @@ describe("toSource", () => {
     const long = toSource({ ...hit, body: "x".repeat(2000) }, 1).excerpt;
     expect(long.length).toBe(1501);
     expect(long.endsWith("…")).toBe(true);
+    expect(toSource({ ...hit, body: "x".repeat(2000) }, 1, 300).excerpt.length).toBe(301);
   });
 });
 
 describe("buildMessages", () => {
   it("numbers passages to match citation indexes and ends with the question", () => {
     const sources = [toSource({ ...hit, title: "Alpha" }, 1), toSource({ ...hit, id: "2", type: "link", url: "https://b.test" }, 2)];
-    const [system, user] = buildMessages("why?", sources);
-    expect(system?.role).toBe("system");
+    const [system, user] = buildMessages("why?", sources, "SYS");
+    expect(system).toEqual({ role: "system", content: "SYS" });
     expect(user?.content).toContain("[1] · thought · Alpha\n");
     expect(user?.content).toContain("[2] · link · (untitled) · https://b.test\n");
     expect(user?.content.endsWith("Question: why?")).toBe(true);

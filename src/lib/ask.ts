@@ -1,11 +1,16 @@
+import { type AskSettings, DEFAULT_ASK_SETTINGS } from "./ask-config";
 import { llmProvider, type LlmMessage } from "./llm";
-import { searchHybrid, type SearchFilters, type SearchHit } from "./search";
+import { searchFts, searchHybrid, searchSemantic, type SearchFilters, type SearchHit } from "./search";
+import { getAskSettings } from "./settings";
+import { workersAiConfigured } from "./workers-ai";
 
 /**
  * /ask: retrieve the cards most relevant to a question, hand them to the
  * configured model as numbered passages, and stream the answer back with
- * `[n]` citations that resolve to cards. Without a model the same pipeline
- * still runs retrieval, so the page shows what a model would have read.
+ * `[n]` citations that resolve to cards. Every knob (model, retrieval mode,
+ * passage count and size, answer length, temperature, prompt) comes from
+ * the settings document edited on /settings. Without a model the same
+ * pipeline still runs retrieval, so the page shows what a model would read.
  */
 export interface AskSource {
   /** 1-based; what the answer cites as `[n]`. */
@@ -25,22 +30,11 @@ export type AskEvent =
   | { type: "done"; citations: number[] }
   | { type: "error"; message: string };
 
-const SOURCE_LIMIT = 8;
-// Per-passage budget. Eight of these plus the prompt stays well inside the
-// context of any instruct model worth configuring.
-const EXCERPT_CHARS = 1500;
-const ANSWER_TOKENS = 1024;
-
-const SYSTEM_PROMPT = `You answer questions about the user's personal notes.
-Use only the numbered passages provided. Cite a passage inline as [n] right after the claim it supports; cite every claim.
-If the passages do not contain the answer, say so plainly instead of guessing. Do not invent passages.
-Answer in markdown, concise, in the user's own voice: no preamble, no restating the question.`;
-
-export function toSource(hit: SearchHit, index: number): AskSource {
+export function toSource(hit: SearchHit, index: number, excerptChars = DEFAULT_ASK_SETTINGS.excerptChars): AskSource {
   // Inline image embeds carry nothing a model can read (same pattern as INLINE_FILE_RE in brain/item.ts).
   const raw = (hit.body ?? hit.url ?? "").replace(/!\[[^\]]*\]\(file:[0-9a-f-]+\)/gi, "");
   const collapsed = raw.replace(/[ \t]+/g, " ").replace(/ ?\n ?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-  const excerpt = collapsed.length > EXCERPT_CHARS ? collapsed.slice(0, EXCERPT_CHARS) + "…" : collapsed;
+  const excerpt = collapsed.length > excerptChars ? collapsed.slice(0, excerptChars) + "…" : collapsed;
   return {
     index,
     id: hit.id,
@@ -53,7 +47,7 @@ export function toSource(hit: SearchHit, index: number): AskSource {
   };
 }
 
-export function buildMessages(question: string, sources: AskSource[]): LlmMessage[] {
+export function buildMessages(question: string, sources: AskSource[], systemPrompt: string): LlmMessage[] {
   const passages = sources
     .map((s) => {
       const head = [`[${s.index}]`, s.type, s.title ?? "(untitled)", s.url ?? ""].filter(Boolean).join(" · ");
@@ -61,7 +55,7 @@ export function buildMessages(question: string, sources: AskSource[]): LlmMessag
     })
     .join("\n\n");
   return [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: systemPrompt },
     { role: "user", content: `Passages:\n\n${passages}\n\nQuestion: ${question}` },
   ];
 }
@@ -79,6 +73,20 @@ export function parseCitations(text: string, sourceCount: number): number[] {
 }
 
 /**
+ * Retrieval per the configured mode. `semantic` without Workers AI falls
+ * back to full-text and flags it, like hybrid does.
+ */
+async function retrieve(question: string, filters: SearchFilters, s: AskSettings) {
+  const f: SearchFilters = { ...filters, limit: s.sourceLimit, match: s.match };
+  if (s.retrieval === "fts") return { hits: await searchFts(question, f), degraded: false };
+  if (s.retrieval === "semantic") {
+    if (!workersAiConfigured()) return { hits: await searchFts(question, f), degraded: true };
+    return { hits: await searchSemantic(question, f), degraded: false };
+  }
+  return searchHybrid(question, f);
+}
+
+/**
  * The first event is always `sources` (or `error`), so a caller can await it
  * before committing to a streamed response; everything after it needs no
  * database access.
@@ -89,15 +97,18 @@ export async function* askStream(
   signal?: AbortSignal,
 ): AsyncGenerator<AskEvent> {
   let sources: AskSource[];
-  let model: string | null;
+  let settings: AskSettings;
   let generate: ((messages: LlmMessage[]) => AsyncIterable<string>) | null = null;
   try {
-    const provider = llmProvider();
-    model = provider?.model ?? null;
-    if (provider) generate = (messages) => provider.generate({ messages, maxTokens: ANSWER_TOKENS, signal });
-    const result = await searchHybrid(question, { ...filters, limit: SOURCE_LIMIT, match: "any" });
-    sources = result.hits.map((hit, i) => toSource(hit, i + 1));
-    yield { type: "sources", sources, degraded: result.degraded, model };
+    settings = await getAskSettings();
+    const provider = llmProvider(settings);
+    if (provider) {
+      const { maxTokens, temperature } = settings;
+      generate = (messages) => provider.generate({ messages, maxTokens, temperature, signal });
+    }
+    const result = await retrieve(question, filters, settings);
+    sources = result.hits.map((hit, i) => toSource(hit, i + 1, settings.excerptChars));
+    yield { type: "sources", sources, degraded: result.degraded, model: provider?.model ?? null };
   } catch (err) {
     yield { type: "error", message: err instanceof Error ? err.message : String(err) };
     return;
@@ -110,7 +121,7 @@ export async function* askStream(
 
   let answer = "";
   try {
-    for await (const text of generate(buildMessages(question, sources))) {
+    for await (const text of generate(buildMessages(question, sources, settings.systemPrompt))) {
       answer += text;
       yield { type: "delta", text };
     }
