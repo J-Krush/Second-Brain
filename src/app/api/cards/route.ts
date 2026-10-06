@@ -14,6 +14,7 @@ const createSchema = z.object({
   type: z.string().optional(),
   title: z.string().nullable().optional(),
   body: z.string().nullable().optional(),
+  note: z.string().nullable().optional(),
   url: z.string().url().nullable().optional(),
   props: z.record(z.string(), z.unknown()).optional(),
   tagIds: z.array(z.number().int()).max(64).optional(),

@@ -99,6 +99,11 @@ export function Desk({ items, onToast }: { items: BrainCard[]; onToast: (msg: st
               className="sb-rise group mb-6 block w-full break-inside-avoid rounded-lg border border-line bg-surface/40 p-4 text-left outline-none transition-colors hover:border-line-2 focus-visible:border-accent/60"
             >
               <Tile card={card} />
+              {card.note && (
+                <p className="mt-3 line-clamp-3 whitespace-pre-line border-l-2 border-line-2 pl-2.5 text-[13px] leading-relaxed text-ink-dim">
+                  {card.note}
+                </p>
+              )}
               <div className="mt-3 flex items-center gap-2 opacity-60 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                 <span className={`font-mono text-[11px] ${style.text}`}>
                   {style.glyph} {style.label.toLowerCase()}

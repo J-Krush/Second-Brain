@@ -20,6 +20,7 @@ export function CardEditor({
   const [type, setType] = useState(card.type);
   const [title, setTitle] = useState(card.title ?? "");
   const [body, setBody] = useState(card.body ?? "");
+  const [note, setNote] = useState(card.note ?? "");
   const [url, setUrl] = useState(card.url ?? "");
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -55,6 +56,7 @@ export function CardEditor({
     type !== card.type ||
     title !== (card.title ?? "") ||
     body !== (card.body ?? "") ||
+    note !== (card.note ?? "") ||
     url !== (card.url ?? "");
 
   async function save() {
@@ -67,6 +69,7 @@ export function CardEditor({
         type,
         title: title || null,
         body: body || null,
+        note: note.trim() || null,
         url: url || null,
       }),
     });
@@ -164,14 +167,20 @@ export function CardEditor({
           void handleFiles(e.dataTransfer.files);
         }}
         placeholder={
-          type === "link"
-            ? "Why you saved this, your notes… (markdown)"
-            : type === "video"
-              ? "What you got out of it… (markdown)"
-              : "Write in markdown… (drag images in, or Attach)"
+          type === "link" || type === "video"
+            ? "Excerpts or longer notes from the page… (markdown)"
+            : "Write in markdown… (drag images in, or Attach)"
         }
-        rows={16}
+        rows={14}
         className="w-full resize-y rounded-lg border border-line bg-surface px-4 py-3 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink-faint"
+      />
+
+      <textarea
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Your take: why it matters, what you think, where it connects…"
+        rows={3}
+        className="w-full resize-y rounded-md border-l-2 border-line-2 bg-surface px-3 py-2 text-[14px] leading-relaxed text-ink-dim outline-none placeholder:text-ink-faint"
       />
     </div>
   );

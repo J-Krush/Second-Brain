@@ -48,7 +48,7 @@ What the Shortcut does (`docs/shortcuts/send-to-brain.plist` is the source; chan
 
 ## What happens to a share
 
-- **The link is found wherever the app put it.** YouTube and Brave send a bare URL; Instagram, Signal, and Messages often wrap it in a caption. The first `http(s)` URL becomes the card's `url`; the surrounding text stays as the body.
+- **The link is found wherever the app put it.** YouTube and Brave send a bare URL; Instagram, Signal, and Messages often wrap it in a caption. The first `http(s)` URL becomes the card's `url`; the surrounding text becomes the card's note.
 - **URLs are canonicalised** (`src/lib/link-url.ts`): tracking params (`utm_*`, `si`, `igsh`, `fbclid`, …) and fragments are dropped, `youtu.be/ID` and `/shorts/ID` become `youtube.com/watch?v=ID`.
 - **Sharing the same thing twice is free.** If a live card already has that canonical URL, the existing card comes back (`200`, `existing: true`) instead of a duplicate. Shares that carry images always create a new card.
 - **Previews are fetched after the response**, so the share sheet closes immediately:

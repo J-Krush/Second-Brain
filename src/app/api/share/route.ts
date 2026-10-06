@@ -25,16 +25,16 @@ export async function POST(request: NextRequest) {
 
   // Instagram, Messages, and Signal put the link inside `text`, sometimes with
   // a caption around it; the link becomes the card's url and only the caption
-  // stays as body.
+  // is kept (as the note).
   const inText = /https?:\/\/\S+/.exec(text);
   const sharedUrl = url ?? inText?.[0] ?? null;
-  const note =
+  const caption =
     inText && sharedUrl && canonicalUrl(inText[0]) === canonicalUrl(sharedUrl)
       ? [text.slice(0, inText.index).trim(), text.slice(inText.index + inText[0].length).trim()].filter(Boolean).join(" ")
       : text;
 
   const existing = sharedUrl && images.length === 0 ? await findCardByUrl(sharedUrl) : null;
-  const card = existing ?? (await createSharedCard(title, note, sharedUrl, images));
+  const card = existing ?? (await createSharedCard(title, caption, sharedUrl, images));
 
   if (request.headers.get("accept")?.includes("application/json")) {
     return NextResponse.json({ card, existing: existing !== null }, { status: existing ? 200 : 201 });
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
 async function createSharedCard(
   title: string | null,
-  note: string,
+  caption: string,
   sharedUrl: string | null,
   images: File[],
 ): Promise<CardView> {
@@ -55,12 +55,15 @@ async function createSharedCard(
     const fileId = await ingestImageBytes(Buffer.from(await image.arrayBuffer()), image.type);
     if (fileId) embeds.push(`![${image.name}](file:${fileId})`);
   }
-  const body = [note, embeds.join("\n")].filter(Boolean).join("\n\n") || null;
+  // Text shared alongside a link is the user's comment on it, so it becomes the note.
+  const note = sharedUrl && caption ? caption : null;
+  const body = [sharedUrl ? "" : caption, embeds.join("\n")].filter(Boolean).join("\n\n") || null;
 
   const card = await createCard({
     type: sharedUrl ? "link" : "thought",
     title,
     body,
+    note,
     url: sharedUrl,
     props: { source: { via: "share" } },
   });

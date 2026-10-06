@@ -15,6 +15,7 @@ import { relativeTime } from "@/lib/format";
 import { renderMarkdown } from "@/lib/markdown";
 import { sourceOf } from "@/lib/source";
 import { BoardPicker } from "./BoardPicker";
+import { NoteEditor } from "./NoteEditor";
 import { RelationEditor } from "./RelationEditor";
 
 type Card = CardDetail["card"];
@@ -148,6 +149,7 @@ function CardModalPanel({ id }: { id: string }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
   const connectRef = useRef<HTMLButtonElement>(null);
+  const noteRef = useRef<HTMLButtonElement>(null);
   const { show: showToast, node: toastNode } = useToast();
 
   const load = useCallback(async () => {
@@ -220,6 +222,11 @@ function CardModalPanel({ id }: { id: string }) {
     button?.click();
   }, []);
 
+  const editNote = useCallback(() => {
+    noteRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    noteRef.current?.click();
+  }, []);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -245,11 +252,14 @@ function CardModalPanel({ id }: { id: string }) {
       } else if (e.key === "l") {
         e.preventDefault();
         connect();
+      } else if (e.key === "n") {
+        e.preventDefault();
+        editNote();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [archive, connect, detail, editing, focusTags, picking, untriaged]);
+  }, [archive, connect, detail, editNote, editing, focusTags, picking, untriaged]);
 
   const card = detail?.card;
   const style = styleFor(card?.type ?? "thought");
@@ -322,6 +332,10 @@ function CardModalPanel({ id }: { id: string }) {
 
             {html && <div className="prose-sb mt-4" dangerouslySetInnerHTML={{ __html: html }} />}
 
+            <div className="mt-5">
+              <NoteEditor cardId={card.id} note={card.note} openRef={noteRef} />
+            </div>
+
             <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-dashed border-line-2 px-3 py-2.5 font-mono text-[11px] text-ink-faint">
               {untriaged && (
                 <button type="button" onClick={() => void archive()} className="flex items-center gap-1.5 hover:text-ink">
@@ -330,6 +344,9 @@ function CardModalPanel({ id }: { id: string }) {
               )}
               <button type="button" onClick={() => setEditing(true)} className="flex items-center gap-1.5 hover:text-ink">
                 <Kbd>e</Kbd> edit
+              </button>
+              <button type="button" onClick={editNote} className="flex items-center gap-1.5 hover:text-ink">
+                <Kbd>n</Kbd> note
               </button>
               <button type="button" onClick={() => setPicking(true)} className="flex items-center gap-1.5 hover:text-ink">
                 <Kbd>b</Kbd> file to board

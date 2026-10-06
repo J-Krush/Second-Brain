@@ -105,6 +105,11 @@ function Entry({
         }}
       >
         <EntryBody card={card} />
+        {card.note && (
+          <p className="mt-3 whitespace-pre-line border-l-2 border-line-2 pl-3 text-[14px] leading-relaxed text-ink-dim">
+            {card.note}
+          </p>
+        )}
       </div>
 
       <footer className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-ink-faint">
