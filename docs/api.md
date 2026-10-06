@@ -50,7 +50,14 @@ curl -X POST https://<your-worker>/api/cards \
 
 | Method | Path | Body | Notes |
 | --- | --- | --- | --- |
-| `POST` | `/api/ask` | `{ question (1–2000 chars), type?, tag? }` | Streams `application/x-ndjson`, one `AskEvent` per line: first `{type:"sources", sources[], degraded, model}` (8 hits max, `match=any` hybrid; `model` is `null` when `LLM_PROVIDER` is unset), then `{type:"delta", text}`… and `{type:"done", citations[]}`, or `{type:"error", message}`. Each source has `index` (1-based, what the answer cites as `[n]`), `id`, `type`, `title`, `excerpt` (≤1500 chars, image embeds stripped), `url`, `createdAt`, `score`. Retrieval finishes before the response is committed; without a model, `done` follows `sources` immediately |
+| `POST` | `/api/ask` | `{ question (1–2000 chars), type?, tag? }` | Streams `application/x-ndjson`, one `AskEvent` per line: first `{type:"sources", sources[], degraded, model}` (`model` is `null` when the provider is off), then `{type:"delta", text}`… and `{type:"done", citations[]}`, or `{type:"error", message}`. Each source has `index` (1-based, what the answer cites as `[n]`), `id`, `type`, `title`, `excerpt` (image embeds stripped), `url`, `createdAt`, `score`. Retrieval mode, passage count/length, model and answer limits come from the ask settings. Retrieval finishes before the response is committed; without a model, `done` follows `sources` immediately |
+
+## Settings
+
+| Method | Path | Body | Notes |
+| --- | --- | --- | --- |
+| `GET` | `/api/settings/ask` | — | `{ settings }`: `provider` (`workers-ai`\|`none`), `model`, `retrieval` (`hybrid`\|`fts`\|`semantic`), `match` (`any`\|`all`), `sourceLimit` 1–20, `excerptChars` 200–6000, `maxTokens` 64–4096, `temperature` 0–2, `systemPrompt` ≤4000. Defaults in `src/lib/ask-config.ts` |
+| `PUT` | `/api/settings/ask` | any subset of the above | Merges over the stored document; unmentioned keys keep their value. Out-of-range → `400 {"error":"<key>: <message>"}`. Returns `{ settings }` after the merge |
 
 ## Tags and edges
 

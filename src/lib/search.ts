@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { embedText, embeddingsConfigured } from "./embeddings";
+import { embedText } from "./embeddings";
+import { workersAiConfigured } from "./workers-ai";
 import { reciprocalRankFusion } from "./rrf";
 
 export type SearchMode = "quick" | "fts" | "semantic" | "hybrid";
@@ -155,7 +156,7 @@ export async function searchHybrid(
   q: string,
   filters: SearchFilters = {},
 ): Promise<HybridResult> {
-  if (!embeddingsConfigured()) {
+  if (!workersAiConfigured()) {
     return { hits: await searchFts(q, filters), degraded: true };
   }
   const [fts, semantic] = await Promise.all([

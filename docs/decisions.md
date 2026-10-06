@@ -44,6 +44,10 @@ Rather than `wrangler secret put` by hand, the workflow writes a `--secrets-file
 
 `src/db/*.sql` is the source of truth; `src/db/schema.ts` (Drizzle) mirrors it for typed queries. `scripts/migrate.ts` applies files alphabetically in transactions and records them in `_migrations`. The workflow migrates then deploys, so every migration must be compatible with the previous Worker for the seconds in between — additive first, destructive later.
 
+### D20 · Custom domain via `custom_domain` route, `workers.dev` kept on
+
+Production is served at `brain.jkrush.dev` through a Workers Custom Domain declared in `wrangler.jsonc` `routes`, so DNS and the certificate are created by the deploy rather than by hand. `workers_dev` is set to `true` explicitly: wrangler disables the `workers.dev` URL when `routes` exist, which would break any capture client still pointed at it, and redeploys with `workers_dev: false` plus custom-domain-only routes currently also require *Zone → Workers Routes* read on the CI token ([workers-sdk#15863](https://github.com/cloudflare/workers-sdk/issues/15863)). Cost: the CI token needs *Workers Routes → Edit* on the `jkrush.dev` zone whenever the domain changes.
+
 ## Product and UI
 
 ### D11 · Everything on one page, with state in the URL
@@ -76,7 +80,11 @@ Clicking anywhere on a link card used to leave the site. Now the card body opens
 
 ### D20 · `/ask` is retrieval first, model second
 
-The pipeline (hybrid retrieval → numbered passages → citations) is fixed in `src/lib/ask.ts`; the model is an `LlmProvider` behind `src/lib/llm.ts` chosen by `LLM_PROVIDER`, and nothing else in the app imports a vendor SDK. Consequences: the page is useful with no model at all (it shows what a model would read, which is also how you debug retrieval), swapping vendors is one registry entry, and the UI contract (NDJSON `sources` → `delta` → `done`) never changes. Finding along the way: `websearch_to_tsquery` ANDs terms, so a question like "what do I know about Hyperdrive" returned nothing because no card contains "know"; retrieval uses `match: "any"` (lexemes ORed, `ts_rank` orders by how many hit) while the search box keeps AND semantics.
+The pipeline (retrieval → numbered passages → citations) is fixed in `src/lib/ask.ts`; the model is an `LlmProvider` behind `src/lib/llm.ts`, and nothing else in the app imports a vendor SDK. Consequences: the page is useful with no model at all (it shows what a model would read, which is also how you debug retrieval), swapping vendors is one registry entry, and the UI contract (NDJSON `sources` → `delta` → `done`) never changes. Finding along the way: `websearch_to_tsquery` ANDs terms, so a question like "what do I know about Hyperdrive" returned nothing because no card contains "know"; retrieval uses `match: "any"` (lexemes ORed, `ts_rank` orders by how many hit) while the search box keeps AND semantics.
+
+### D21 · Ask is tuned from the UI, not from env (migration `0004`)
+
+Model, retrieval mode, passage count and length, answer length, temperature and the system prompt are a JSON document in a `settings` table (one row per feature, zod schema fills defaults), edited on `/settings` with a live cost strip. Env would have meant a redeploy per experiment; this is the one place in the app where knobs change weekly. The cost strip exists because the knobs trade quality for neurons and the price of a change should be visible before it lands. Workers AI is the first provider because the binding already exists (zero config in prod) and the free 10k neurons/day covers ~50 questions on gpt-oss-120b; the PUT patch schema is built without defaults because `.partial()` on a defaulted zod object still fills them in and would silently reset every knob the patch didn't mention.
 
 ## Testing and tooling
 
