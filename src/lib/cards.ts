@@ -52,6 +52,8 @@ export interface CreateCardInput {
   body?: string | null;
   url?: string | null;
   props?: Record<string, unknown>;
+  /** Filed at capture (e.g. tagged): skips the inbox. */
+  triaged?: boolean;
 }
 
 export async function createCard(input: CreateCardInput): Promise<CardView> {
@@ -64,6 +66,7 @@ export async function createCard(input: CreateCardInput): Promise<CardView> {
       body: input.body ?? null,
       url: input.url ?? null,
       props: withSource(input.props ?? {}, input.url ?? null),
+      triagedAt: input.triaged ? sql`now()` : null,
     })
     .returning(cardCols);
   if (row!.body) await syncInlineRefs(row!.id, row!.body);
@@ -184,8 +187,9 @@ export async function listCards(params: ListParams): Promise<ListResult> {
   const types = params.types?.filter((t) => CARD_TYPES[t]) ?? [];
   if (types.length) filters.push(inArray(cards.type, types));
   if (params.tagIds?.length) {
+    // Drizzle expands a JS array param into `($1, $2, …)`: valid after IN, not inside ANY(…::int[]).
     filters.push(
-      sql`EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = ${cards.id} AND ct.tag_id = ANY(${params.tagIds}::int[]))`,
+      sql`EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = ${cards.id} AND ct.tag_id IN ${params.tagIds})`,
     );
   }
   if (params.cursor) {
@@ -230,12 +234,13 @@ export async function listCards(params: ListParams): Promise<ListResult> {
 export interface Facets {
   kinds: { type: string; count: number }[];
   sources: { key: string; label: string; via: SourceFilter["via"]; domain: string | null; count: number }[];
+  tags: { id: number; name: string; color: string | null; count: number }[];
 }
 
 /** Counts behind the filter menus, scoped to inbox or library only. */
 export async function listFacets(view: ListParams["view"]): Promise<Facets> {
   const where = and(...scopeFilters(view));
-  const [kindRows, sourceRows] = await Promise.all([
+  const [kindRows, sourceRows, tagRows] = await Promise.all([
     db
       .select({ type: cards.type, count: sql<number>`count(*)::int` })
       .from(cards)
@@ -252,6 +257,14 @@ export async function listFacets(view: ListParams["view"]): Promise<Facets> {
       .where(where)
       .groupBy(sql`1`, sql`2`)
       .orderBy(desc(sql`count(*)`)),
+    // Every tag, counted within scope: a zero-count tag stays pickable.
+    db
+      .select({ id: tags.id, name: tags.name, color: tags.color, count: sql<number>`count(${cards.id})::int` })
+      .from(tags)
+      .leftJoin(cardTags, eq(cardTags.tagId, tags.id))
+      .leftJoin(cards, and(eq(cards.id, cardTags.cardId), where))
+      .groupBy(tags.id)
+      .orderBy(asc(tags.name)),
   ]);
   const sources: Facets["sources"] = [];
   for (const row of sourceRows) {
@@ -272,7 +285,7 @@ export async function listFacets(view: ListParams["view"]): Promise<Facets> {
       count: row.count,
     });
   }
-  return { kinds: kindRows.filter((k) => CARD_TYPES[k.type]), sources };
+  return { kinds: kindRows.filter((k) => CARD_TYPES[k.type]), sources, tags: tagRows };
 }
 
 export interface CardDetail {

@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { TagPicker } from "@/components/TagPicker";
 import { CARD_STYLE } from "@/components/card-style";
 import { emitCardChanged } from "@/lib/card-events";
 import type { CreatedCard } from "@/lib/capture-bus";
+import type { CardTag } from "@/lib/cards";
 import type { Source } from "@/lib/source";
 import { uploadFile } from "@/lib/upload-client";
 import { FacetMenu, type FacetOption } from "./FacetMenu";
@@ -24,6 +26,7 @@ export interface Draft {
   body: string | null;
   url: string | null;
   props: Record<string, unknown>;
+  tagIds?: number[];
 }
 
 interface Uploaded {
@@ -141,6 +144,7 @@ export function Composer({
   const [files, setFiles] = useState<Attachment[]>([]);
   const [quote, setQuote] = useState<QuoteFields | null>(null);
   const [kind, setKind] = useState<string | null>(null);
+  const [tags, setTags] = useState<CardTag[]>([]);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -174,11 +178,12 @@ export function Composer({
     if (!draft || busy || uploading) return;
     setBusy(true);
     try {
-      const card = await postCard(draft);
+      const card = await postCard({ ...draft, tagIds: tags.map((t) => t.id) });
       setText("");
       setFiles([]);
       setQuote(null);
       setKind(null);
+      setTags([]);
       onCaptured(card);
     } catch {
       onToast("capture failed");
@@ -192,6 +197,13 @@ export function Composer({
   return (
     <div
       data-composer-drop
+      // ⌘↵ from any field (text, quote fields, tag input) captures.
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          void submit();
+        }
+      }}
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes("Files")) return;
         e.preventDefault();
@@ -213,12 +225,6 @@ export function Composer({
           autoFocus
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              void submit();
-            }
-          }}
           rows={Math.min(10, Math.max(3, lines))}
           placeholder={
             quote ? "The quote…" : "What's on your mind? Paste a link, drop a file, or just type. # Title on line one."
@@ -277,6 +283,15 @@ export function Composer({
           ))}
         </ul>
       )}
+
+      <div className="mx-4 mt-2">
+        <TagPicker
+          value={tags}
+          direction="up"
+          onAdd={(tag) => setTags((prev) => [...prev, tag])}
+          onRemove={(tag) => setTags((prev) => prev.filter((t) => t.id !== tag.id))}
+        />
+      </div>
 
       <div className="mt-2 flex items-center gap-1 border-t border-line px-2 py-1.5 font-mono text-[11px] text-ink-faint">
         <label className="cursor-pointer rounded px-2 py-1 hover:bg-surface-2 hover:text-ink">

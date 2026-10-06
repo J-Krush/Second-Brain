@@ -78,6 +78,14 @@ The header uses `backdrop-blur`, which creates a containing block that clips `po
 
 Clicking anywhere on a link card used to leave the site. Now the card body opens the detail modal like every other kind; only the small `domain ↗` line (and the URL inside the modal) go external. Consistency beats one saved click.
 
+### D21 · Tags: live facets, one picker that can create, rename merges
+
+The tag filter used to be fed by a server-rendered `listTags()` prop on `/`, so a tag created in the card modal never reached the menu until a full reload. Tags now come from `GET /api/cards/facets` with the other menus and refetch on `emitCardChanged`. Every tag is listed (zero-count ones too) so a selected tag can't vanish from its own menu.
+
+Attaching tags is the one "choose from N" surface that is not `FacetMenu`: it must also create, and it is typed into far more than clicked. `TagPicker` (chips + combobox, all unchosen tags on focus, `create #x` row) is shared by the card modal and the `⌘J` composer. Tagging at capture sets `triaged_at` on insert, consistent with D12.
+
+`/tags` renames and deletes. Renaming onto an existing name (case-insensitive) merges rather than erroring: duplicates like `prepping`/`Prepping` are the main reason to rename. The merge is one SQL statement (data-modifying CTEs) because the codebase has no transactions.
+
 ## Testing and tooling
 
 ### D18 · Small pure test suite, mandatory manual smoke

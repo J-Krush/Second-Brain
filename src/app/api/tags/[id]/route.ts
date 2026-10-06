@@ -19,9 +19,9 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success || parsed.data.name === undefined)
     return badRequest("name required");
-  const tag = await renameTag(id, parsed.data.name, parsed.data.color);
-  if (!tag) return notFound();
-  return NextResponse.json({ tag });
+  const result = await renameTag(id, parsed.data.name, parsed.data.color);
+  if (!result) return notFound();
+  return NextResponse.json(result);
 }
 
 export async function DELETE(request: NextRequest, { params }: Ctx) {

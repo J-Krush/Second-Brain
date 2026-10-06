@@ -3,6 +3,7 @@ import { z } from "zod";
 import { captureLink } from "@/lib/og";
 import { embedCard } from "@/lib/embeddings";
 import { createCard, listCards } from "@/lib/cards";
+import { attachTags } from "@/lib/tags";
 import { authorize, badRequest, unauthorized } from "@/lib/route-helpers";
 import { parseSourceKey } from "@/lib/source";
 import { csv } from "@/lib/card-url";
@@ -15,6 +16,7 @@ const createSchema = z.object({
   body: z.string().nullable().optional(),
   url: z.string().url().nullable().optional(),
   props: z.record(z.string(), z.unknown()).optional(),
+  tagIds: z.array(z.number().int()).max(64).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -27,7 +29,10 @@ export async function POST(request: NextRequest) {
   }
   const parsed = createSchema.safeParse(payload);
   if (!parsed.success) return badRequest(parsed.error.issues[0]?.message ?? "invalid");
-  const card = await createCard(parsed.data);
+  const { tagIds, ...input } = parsed.data;
+  // Tagging at capture files the card, same as tagging it later from the modal.
+  const card = await createCard({ ...input, triaged: !!tagIds?.length });
+  if (tagIds?.length) await attachTags(card.id, tagIds);
   if (card.type === "link" && card.url) {
     after(() => captureLink(card.id, card.url!));
   }

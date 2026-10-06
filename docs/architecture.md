@@ -54,10 +54,11 @@ Upload is client-driven and dedupes on content hash: the client computes sha256 
 
 | Area | Files | Notes |
 | --- | --- | --- |
-| Header | `src/app/(app)/layout.tsx`, `components/nav/ScopeNav.tsx`, `components/search/GlobalSearch.tsx`, `components/capture/AddButton.tsx` | Tabs `inbox · library · settings`, the `⌘K` palette, the `+ Add ⌘J` button. The search and capture overlays are portaled to `document.body` because the header's `backdrop-blur` would clip fixed children |
+| Header | `src/app/(app)/layout.tsx`, `components/nav/ScopeNav.tsx`, `components/search/GlobalSearch.tsx`, `components/capture/AddButton.tsx` | Tabs `inbox · library · tags · settings`, the `⌘K` palette, the `+ Add ⌘J` button. The search and capture overlays are portaled to `document.body` because the header's `backdrop-blur` would clip fixed children |
 | Stream | `components/brain/BrainPage.tsx` | Owns URL state (`scope`, `view`, `type`, `source`, `tag`, `card`), fetches `/api/cards` and `/api/cards/facets`, renders `Shell` (filter row) + `Timeline` or `Desk` |
 | Filters | `components/brain/FacetMenu.tsx`, `Shell.tsx` | One control for kind/source/tag (multi) and for the composer's kind picker (single) |
-| Capture | `components/capture/CaptureDialog.tsx`, `components/brain/Composer.tsx`, `lib/capture-bus.ts` | `⌘J` toggles the dialog; `openCapture({ onCreated })` lets a board canvas receive the new card and place it |
+| Capture | `components/capture/CaptureDialog.tsx`, `components/brain/Composer.tsx`, `lib/capture-bus.ts` | `⌘J` toggles the dialog; `openCapture({ onCreated })` lets a board canvas receive the new card and place it. Tags picked here are sent as `tagIds` and file the card to the library |
+| Tags | `components/TagPicker.tsx`, `components/TagManager.tsx`, `app/(app)/tags/page.tsx` | `TagPicker` attaches/creates in the card modal and composer; `/tags` renames (merging on name clash) and deletes |
 | Card | `components/card/CardModal.tsx` (+ `CardEditor`, `RelationEditor`, `BoardPicker`) | `?card=<id>` opens it; back button closes. Triage hotkeys `e` archive, `b` file to board, `t` tag |
 | Boards | `components/board/BoardCanvas.tsx`, `CardShape.tsx` | tldraw with a custom shape per placed card. Placements are authoritative; native tldraw shapes (arrows, scribbles) persist as a filtered snapshot in the board card's `props` |
 

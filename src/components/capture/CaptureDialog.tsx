@@ -36,7 +36,7 @@ export function CaptureDialog() {
     setOpts(null);
     if (handled) return;
     if (card.type === "board") router.push(`/boards/${card.id}`);
-    else toast.show("captured → inbox");
+    else toast.show(card.triagedAt ? "captured → library" : "captured → inbox");
   }
 
   return (
