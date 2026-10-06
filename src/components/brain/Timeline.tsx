@@ -7,7 +7,7 @@ import { emitCardChanged } from "@/lib/card-events";
 import { openCard } from "@/lib/card-url";
 import { sourceOf } from "@/lib/source";
 import { displayBody, fmtBytes, fmtDay, fmtTime, groupByDay, headline, isQuote, type BrainCard, type Scope } from "./item";
-import { PdfStack, Provenance, SiteMark, Waveform, fileUrl, heroOf, stagger } from "./parts";
+import { PdfStack, SiteMark, Waveform, fileUrl, heroOf, stagger } from "./parts";
 
 /**
  * A daybook: one column, days as a sticky margin, every kind typeset as
@@ -33,7 +33,8 @@ export function Timeline({ items, scope, onToast }: { items: BrainCard[]; scope:
                 {d.rel.toLowerCase()}
               </div>
             </header>
-            <div className="space-y-11">
+            {/* Hairlines, not frames: entries read as separate without turning into Desk tiles. */}
+            <div className="divide-y divide-line/70">
               {dayItems.map((card) => (
                 <Entry key={card.id} card={card} index={index++} scope={scope} onToast={onToast} />
               ))}
@@ -72,19 +73,13 @@ function Entry({
 }) {
   const router = useRouter();
   const style = styleFor(card.type);
-  const source = sourceOf(card);
   const isBoard = card.type === "board";
   const open = () => (isBoard ? router.push(`/boards/${card.id}`) : openCard(card.id));
-  // Links show their domain and book quotes their citation inline already.
-  const showProvenance = card.type !== "link" && card.type !== "video" && !(source.via === "book" && isQuote(card.type));
 
   return (
-    <article style={stagger(index)} className="sb-rise group">
+    <article style={stagger(index)} className="sb-rise group py-9 first:pt-0">
       <div className="mb-2.5 flex items-center gap-2.5 font-mono text-[11px] text-ink-faint">
         <span className="tabular-nums">{fmtTime(card.createdAt)}</span>
-        <span className={style.text}>
-          {style.glyph} {style.label.toLowerCase()}
-        </span>
         {card.triagedAt === null && <span className="size-1.5 rounded-full bg-accent" aria-label="untriaged" />}
         <span className="ml-auto flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
           {scope === "inbox" && card.triagedAt === null && (
@@ -112,14 +107,14 @@ function Entry({
         <EntryBody card={card} />
       </div>
 
-      {(showProvenance || card.tags.length > 0) && (
-        <footer className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-ink-faint">
-          {showProvenance && <Provenance source={source} />}
-          {card.tags.map((t) => (
-            <span key={t.id}>#{t.name}</span>
-          ))}
-        </footer>
-      )}
+      <footer className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-ink-faint">
+        <span className={style.text}>
+          {style.glyph} {style.label.toLowerCase()}
+        </span>
+        {card.tags.map((t) => (
+          <span key={t.id}>#{t.name}</span>
+        ))}
+      </footer>
     </article>
   );
 }

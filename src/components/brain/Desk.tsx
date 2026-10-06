@@ -7,7 +7,7 @@ import { openCard } from "@/lib/card-url";
 import { sourceOf } from "@/lib/source";
 import { captureFiles, postCard } from "./Composer";
 import { displayBody, headline, isQuote, type BrainCard } from "./item";
-import { PdfStack, Provenance, SiteMark, Waveform, fileUrl, heroOf, isTyping, stagger } from "./parts";
+import { PdfStack, SiteMark, Waveform, fileUrl, heroOf, isTyping, stagger } from "./parts";
 
 /**
  * A light table: each object at its natural shape inside a faint frame. The
@@ -100,8 +100,9 @@ export function Desk({ items, onToast }: { items: BrainCard[]; onToast: (msg: st
             >
               <Tile card={card} />
               <div className="mt-3 flex items-center gap-2 opacity-60 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                <span className={`font-mono text-[11px] ${style.text}`}>{style.glyph}</span>
-                <Provenance source={sourceOf(card)} />
+                <span className={`font-mono text-[11px] ${style.text}`}>
+                  {style.glyph} {style.label.toLowerCase()}
+                </span>
                 {card.triagedAt === null && (
                   <span className="ml-auto size-1.5 flex-none rounded-full bg-accent" aria-label="untriaged" />
                 )}

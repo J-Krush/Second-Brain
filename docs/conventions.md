@@ -41,7 +41,7 @@ Stack: TypeScript `strict` + `noUncheckedIndexedAccess`, React 19, Next 16 App R
 | `⌘K`, `/` | everywhere | Open search |
 | `⌘↵` | capture dialog | Save |
 | `↵` / `⇧↵` | ask | Send / newline |
-| `e` / `b` / `t` | card modal | Archive / file to board / tag |
+| `a` / `e` / `b` / `t` / `l` | card modal | Archive (inbox only) / edit / file to board / tag / connect a card |
 | `Esc` | any overlay | Close |
 
 ### Design system
