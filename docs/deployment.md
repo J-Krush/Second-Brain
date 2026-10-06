@@ -1,6 +1,6 @@
 # Deployment
 
-Production is one Cloudflare Worker (`second-brain`), a Neon Postgres database reached through Hyperdrive, and a private R2 bucket. GitHub Actions owns the pipeline: every push to `main` typechecks, tests, **migrates, then deploys**. Nobody runs `pnpm deploy` by hand against production.
+Production is one Cloudflare Worker (`second-brain`) served at `https://brain.jkrush.dev`, a Neon Postgres database reached through Hyperdrive, and a private R2 bucket. GitHub Actions owns the pipeline: every push to `main` typechecks, tests, **migrates, then deploys**. Nobody runs `pnpm deploy` by hand against production.
 
 ## Pipeline (`.github/workflows/deploy.yml`)
 
@@ -31,8 +31,9 @@ pnpm cf hyperdrive create second-brain \
 - **Hyperdrive caching must stay disabled.** It caches reads for 60s by default, which would hide a card you just captured from the next page load. Put the returned `id` into `wrangler.jsonc` → `hyperdrive[0].id`.
 - `images: { binding: "IMAGES" }` and `ai: { binding: "AI" }` need no setup beyond the Images and Workers AI products being enabled on the account; both are within free tiers at single-user scale.
 - Create an R2 API token (Object Read & Write, scoped to the bucket) for `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`.
-- Create a Cloudflare API token for CI from the *Edit Cloudflare Workers* template (that is what `opennextjs-cloudflare deploy` runs under); this becomes `CLOUDFLARE_API_TOKEN`.
+- Create a Cloudflare API token for CI from the *Edit Cloudflare Workers* template (that is what `opennextjs-cloudflare deploy` runs under); this becomes `CLOUDFLARE_API_TOKEN`. Its zone resources must include the custom domain's zone: attaching or changing a custom domain needs *Zone → Workers Routes → Edit* on that zone, and the deploy fails without it.
 - Set `vars.R2_ACCOUNT_ID` and `vars.R2_BUCKET` in `wrangler.jsonc`.
+- **Custom domain:** `routes` in `wrangler.jsonc` holds `{ "pattern": "<host>", "custom_domain": true }`. The zone must be active in the same account; the deploy creates the DNS record and certificate (do not add a DNS record for the host yourself). Change the pattern to your own host, or delete `routes` to serve only from `*.workers.dev`. `workers_dev: true` is explicit because wrangler turns the `workers.dev` URL off by default once `routes` is set.
 
 ### 2. Neon
 
@@ -59,7 +60,7 @@ Create a `production` environment (no approval gate required, but it is where yo
 
 ### 4. First login
 
-Visit the Worker URL, log in with the password you hashed. Cron Triggers (`0 4 * * *` GC, `15 * * * *` embed sweep) are registered by the deploy from `wrangler.jsonc` → `triggers.crons`.
+Visit `https://brain.jkrush.dev` (or the `workers.dev` URL), log in with the password you hashed. The session cookie is per-host, so each hostname needs its own login. Cron Triggers (`0 4 * * *` GC, `15 * * * *` embed sweep) are registered by the deploy from `wrangler.jsonc` → `triggers.crons`.
 
 ## Secrets and config: who owns what
 
@@ -76,6 +77,6 @@ Visit the Worker URL, log in with the password you hashed. Cron Triggers (`0 4 *
 
 - **Logs:** `observability.enabled: true` in `wrangler.jsonc`; use the Workers dashboard or `pnpm cf tail second-brain`.
 - **Rotate the password:** `pnpm hash-password "new"` → `gh secret set APP_PASSWORD_HASH` → re-run the workflow. Existing sessions stay valid until they expire (30 days rolling) unless you also rotate `SESSION_SECRET`.
-- **Run maintenance by hand:** buttons on `/settings`, or `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://<worker>/api/admin/gc`.
+- **Run maintenance by hand:** buttons on `/settings`, or `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://brain.jkrush.dev/api/admin/gc`.
 - **Escape hatch:** `/settings` → *Export everything* streams a zip of every card as markdown plus every file. `pg_dump` against the Neon direct URL covers the rest.
 - **Preview before merging an edge-sensitive change:** `pnpm preview` runs the built Worker locally under wrangler with `.dev.vars`, which is the only way to exercise `worker.ts`, bindings, and the OpenNext output before CI does.
