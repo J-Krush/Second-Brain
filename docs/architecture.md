@@ -34,7 +34,7 @@ Everything is a row in `cards` with a `type` (`thought`, `quote`, `link`, `video
 ## Capture path
 
 1. `POST /api/cards` (browser composer, share target, or bearer client) validates with zod, inserts the card, stamps `props.source` (`typed` / `web:<domain>` / `share` / `upload` / `book`), and syncs `file_refs` from `![](file:UUID)` embeds in the body.
-2. `after()`: if it is a link, `captureLink` fetches the page, parses OpenGraph, downloads the image into R2 as a file with an `og_cache` ref, and writes metadata into `props`. Then `embedCard` hashes `title + body`, skips if unchanged, otherwise embeds and stores the vector.
+2. `after()`: if it is a link, `captureLink` fetches the page, parses OpenGraph (or, for hosts in `OEMBED_ENDPOINT` such as YouTube, asks their oEmbed endpoint), downloads the image into R2 as a file with an `og_cache` ref, and writes metadata into `props`. The title is filled when empty or still equal to the previous auto-filled one. Then `embedCard` hashes `title + body`, skips if unchanged, otherwise embeds and stores the vector.
 3. The browser emits a `card-changed` window event (`src/lib/card-events.ts`); the stream, inbox count, and facet counts refetch.
 
 ## Files
