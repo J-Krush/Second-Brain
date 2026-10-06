@@ -56,11 +56,11 @@ Inbox and library are the same `/` page (`?scope=`), as a timeline or desk (`?vi
 
 ### D12 · Triage is a timestamp, not a folder (migration `0002`)
 
-The inbox is `triaged_at IS NULL`. Tagging a card, placing it on a board, or creating a board auto-triages; `e` in the modal archives explicitly. The backfill treated anything already tagged/placed/a board as triaged. This keeps "capture never requires a location" true while giving the inbox a way to empty.
+The inbox is `triaged_at IS NULL`. Tagging a card, placing it on a board, or creating a board auto-triages; `a` in the modal archives explicitly. The backfill treated anything already tagged/placed/a board as triaged. This keeps "capture never requires a location" true while giving the inbox a way to empty.
 
 ### D13 · Provenance lives in `props.source` and is filterable in SQL (migration `0003`)
 
-`sourceOf()` (`src/lib/source.ts`) resolves a card's origin — `typed`, `web` (+ domain), `share`, `upload`, `book` (+ author/work/page). It started as a display-only derivation; making source a real library filter required it to be queryable, so `0003` backfilled `props.source` for every existing card (domain from URL, else typed) and `createCard` stamps it going forward. Facet keys are `web:<domain>` or the bare channel.
+`sourceOf()` (`src/lib/source.ts`) resolves a card's origin — `typed`, `web` (+ domain), `share`, `upload`, `book` (+ author/work/page). It started as a display-only derivation; making source a real library filter required it to be queryable, so `0003` backfilled `props.source` for every existing card (domain from URL, else typed) and `createCard` stamps it going forward. Facet keys are `web:<domain>` or the bare channel. Later demoted: in practice nobody filtered by it, so the web UI dropped the source menu and the per-entry provenance line (entries show their kind instead). Source now appears only in the card modal; `GET /api/cards?source=` still filters.
 
 ### D14 · Capture is a `⌘J` dialog, not an inline form
 
@@ -68,7 +68,7 @@ The first header iteration kept a composer at the top of the stream; it dominate
 
 ### D15 · One filter control, multi-select, OR within / AND across
 
-The library briefly had two filter systems (a kind-pill row and a source shelf inside the Desk). They were replaced by a single `FacetMenu` used for kind, source, and tag, with counts from `GET /api/cards/facets` (scoped to inbox/library, not to the other active filters, so counts never collapse to the current selection). Values within one menu are OR'd; menus are AND'd. The same component in single mode is the composer's kind picker, so every "choose from N" surface reads the same.
+The library briefly had two filter systems (a kind-pill row and a source shelf inside the Desk). They were replaced by a single `FacetMenu` used for kind and tag (source was a third menu until D13's demotion), with counts from `GET /api/cards/facets` (scoped to inbox/library, not to the other active filters, so counts never collapse to the current selection). Values within one menu are OR'd; menus are AND'd. The same component in single mode is the composer's kind picker, so every "choose from N" surface reads the same.
 
 ### D16 · Overlays are portaled to `document.body`
 
@@ -77,6 +77,20 @@ The header uses `backdrop-blur`, which creates a containing block that clips `po
 ### D17 · Link cards open the modal; the external hop is explicit
 
 Clicking anywhere on a link card used to leave the site. Now the card body opens the detail modal like every other kind; only the small `domain ↗` line (and the URL inside the modal) go external. Consistency beats one saved click.
+
+### D21 · Tags: live facets, one picker that can create, rename merges
+
+The tag filter used to be fed by a server-rendered `listTags()` prop on `/`, so a tag created in the card modal never reached the menu until a full reload. Tags now come from `GET /api/cards/facets` with the other menus and refetch on `emitCardChanged`. Every tag is listed (zero-count ones too) so a selected tag can't vanish from its own menu.
+
+Attaching tags is the one "choose from N" surface that is not `FacetMenu`: it must also create, and it is typed into far more than clicked. `TagPicker` (chips + combobox, all unchosen tags on focus, `create #x` row) is shared by the card modal and the `⌘J` composer. Tagging at capture sets `triaged_at` on insert, consistent with D12.
+
+`/tags` renames and deletes. Renaming onto an existing name (case-insensitive) merges rather than erroring: duplicates like `prepping`/`Prepping` are the main reason to rename. The merge is one SQL statement (data-modifying CTEs) because the codebase has no transactions.
+
+### D22 · Every card has a separate `note`
+
+`body` is the card's content: the thought, the quote's words, a document's text. What the user thinks about it had nowhere to go except into that same field, which for a quote corrupts the quotation. `cards.note` holds the user's take for every type. It renders as the grey-bar line under any entry, is edited in place in the card modal (`n`), can be added from `⌘J` (`✎ note`), and is part of search (tsvector weight B) and the embedding input.
+
+For links the composer's "text after the URL" and the share target's shared text now go to `note`, not `body`. Migration `0004` moves existing link/video bodies into `note`, except bodies with `file:` embeds, since inline file refs are synced from `body` only and moving them would let GC collect the images. Between that migration and the Worker deploy, the old Worker shows those links without their text; nothing is lost. The embedding hash only includes the note when there is one, so existing cards don't all re-embed.
 
 ## Testing and tooling
 

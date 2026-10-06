@@ -21,6 +21,7 @@ const patchSchema = z.object({
   type: z.string().optional(),
   title: z.string().nullable().optional(),
   body: z.string().nullable().optional(),
+  note: z.string().nullable().optional(),
   url: z.string().url().nullable().optional(),
   props: z.record(z.string(), z.unknown()).optional(),
   triaged: z.boolean().optional(),
@@ -48,7 +49,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     after(() => captureLink(card.id, card.url!));
   }
   // Re-embed when the embeddable text changed (embedCard hash-guards no-ops).
-  if (parsed.data.title !== undefined || parsed.data.body !== undefined) {
+  if (parsed.data.title !== undefined || parsed.data.body !== undefined || parsed.data.note !== undefined) {
     after(() => embedCard(card.id));
   }
   return NextResponse.json({ card });

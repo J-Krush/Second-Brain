@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type Ref } from "react";
 import { styleFor } from "@/components/card-style";
 import { emitCardChanged } from "@/lib/card-events";
 import { openCard } from "@/lib/card-url";
@@ -39,7 +39,7 @@ function Glyph({ type }: { type: string }) {
   );
 }
 
-/** Quick-search for a link target; never offers the card itself. */
+/** Quick-search for a card to connect to; never offers the card itself. */
 function TargetSearch({ selfId, onPick }: { selfId: string; onPick: (t: Target) => void }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Target[]>([]);
@@ -91,7 +91,7 @@ function TargetSearch({ selfId, onPick }: { selfId: string; onPick: (t: Target) 
             if (h) onPick(h);
           }
         }}
-        placeholder="Find a card to link…"
+        placeholder="Find a card to connect…"
         className="w-full rounded-md bg-base px-2.5 py-1.5 font-mono text-[12px] text-ink outline-none placeholder:text-ink-faint"
       />
       {hits.length > 0 && (
@@ -118,18 +118,21 @@ function TargetSearch({ selfId, onPick }: { selfId: string; onPick: (t: Target) 
 }
 
 /**
- * Card-to-card relations. Outgoing rows read "→ label", incoming "← label";
- * both directions can be created and edited from here. Writes are optimistic
- * and roll back if the server refuses.
+ * Card-to-card relations ("connected cards", not URLs). Outgoing rows read
+ * "→ label", incoming "← label"; both directions can be created and edited
+ * from here. Writes are optimistic and roll back if the server refuses.
+ * `addRef` lets the modal's `l` hotkey open the form.
  */
 export function RelationEditor({
   cardId,
   links,
   backlinks,
+  addRef,
 }: {
   cardId: string;
   links: RelatedCard[];
   backlinks: RelatedCard[];
+  addRef?: Ref<HTMLButtonElement>;
 }) {
   const [outgoing, setOutgoing] = useState(links);
   const [incoming, setIncoming] = useState(backlinks);
@@ -161,7 +164,7 @@ export function RelationEditor({
     if (!form?.target) return;
     const { dir, target } = form;
     if (target.id === cardId) {
-      setError("A card can't link to itself");
+      setError("A card can't connect to itself");
       return;
     }
     const label = form.label.trim() || null;
@@ -187,7 +190,7 @@ export function RelationEditor({
     if (!res?.ok) {
       setOutgoing(prevOut);
       setIncoming(prevIn);
-      setError("Couldn't save link");
+      setError("Couldn't save connection");
       return;
     }
     emitCardChanged(cardId);
@@ -206,7 +209,7 @@ export function RelationEditor({
     if (!res?.ok) {
       setOutgoing(prevOut);
       setIncoming(prevIn);
-      setError("Couldn't remove link");
+      setError("Couldn't remove connection");
       return;
     }
     emitCardChanged(cardId);
@@ -353,7 +356,7 @@ export function RelationEditor({
                   cancel
                 </button>
                 <button type="submit" className="rounded-md bg-accent px-3 py-1 font-bold text-inset">
-                  {form.editing ? "save" : "link"}
+                  {form.editing ? "save" : "connect"}
                 </button>
               </div>
             </form>
@@ -368,6 +371,7 @@ export function RelationEditor({
         </div>
       ) : (
         <button
+          ref={addRef}
           type="button"
           onClick={() => {
             setError(null);
@@ -375,7 +379,7 @@ export function RelationEditor({
           }}
           className="mt-2 rounded border border-dashed border-line-2 px-2 py-0.5 font-mono text-[11px] text-ink-faint hover:text-ink"
         >
-          + link
+          + connect a card
         </button>
       )}
     </div>

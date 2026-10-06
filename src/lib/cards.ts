@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cardTags, cards, edges, fileRefs, files, placements, tags } from "@/db/schema";
 import { syncInlineRefs } from "./filerefs";
-import { sourceFacetLabel, sourceOf, type SourceFilter } from "./source";
+import { sourceOf, type SourceFilter } from "./source";
 
 // Columns safe to ship to the client: excludes the 1024-float `embedding` and
 // the internal generated `search` tsvector. Used for every read + returning().
@@ -11,6 +11,7 @@ export const cardCols = {
   type: cards.type,
   title: cards.title,
   body: cards.body,
+  note: cards.note,
   url: cards.url,
   props: cards.props,
   createdAt: cards.createdAt,
@@ -26,6 +27,8 @@ export type CardView = {
   type: string;
   title: string | null;
   body: string | null;
+  /** The user's own take on the card, separate from its content. */
+  note: string | null;
   url: string | null;
   props: unknown;
   createdAt: Date;
@@ -50,8 +53,11 @@ export interface CreateCardInput {
   type?: string;
   title?: string | null;
   body?: string | null;
+  note?: string | null;
   url?: string | null;
   props?: Record<string, unknown>;
+  /** Filed at capture (e.g. tagged): skips the inbox. */
+  triaged?: boolean;
 }
 
 export async function createCard(input: CreateCardInput): Promise<CardView> {
@@ -62,8 +68,10 @@ export async function createCard(input: CreateCardInput): Promise<CardView> {
       type,
       title: input.title ?? null,
       body: input.body ?? null,
+      note: input.note ?? null,
       url: input.url ?? null,
       props: withSource(input.props ?? {}, input.url ?? null),
+      triagedAt: input.triaged ? sql`now()` : null,
     })
     .returning(cardCols);
   if (row!.body) await syncInlineRefs(row!.id, row!.body);
@@ -184,8 +192,9 @@ export async function listCards(params: ListParams): Promise<ListResult> {
   const types = params.types?.filter((t) => CARD_TYPES[t]) ?? [];
   if (types.length) filters.push(inArray(cards.type, types));
   if (params.tagIds?.length) {
+    // Drizzle expands a JS array param into `($1, $2, …)`: valid after IN, not inside ANY(…::int[]).
     filters.push(
-      sql`EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = ${cards.id} AND ct.tag_id = ANY(${params.tagIds}::int[]))`,
+      sql`EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = ${cards.id} AND ct.tag_id IN ${params.tagIds})`,
     );
   }
   if (params.cursor) {
@@ -229,50 +238,29 @@ export async function listCards(params: ListParams): Promise<ListResult> {
 
 export interface Facets {
   kinds: { type: string; count: number }[];
-  sources: { key: string; label: string; via: SourceFilter["via"]; domain: string | null; count: number }[];
+  tags: { id: number; name: string; color: string | null; count: number }[];
 }
 
 /** Counts behind the filter menus, scoped to inbox or library only. */
 export async function listFacets(view: ListParams["view"]): Promise<Facets> {
   const where = and(...scopeFilters(view));
-  const [kindRows, sourceRows] = await Promise.all([
+  const [kindRows, tagRows] = await Promise.all([
     db
       .select({ type: cards.type, count: sql<number>`count(*)::int` })
       .from(cards)
       .where(where)
       .groupBy(cards.type)
       .orderBy(desc(sql`count(*)`)),
+    // Every tag, counted within scope: a zero-count tag stays pickable.
     db
-      .select({
-        via: sql<string | null>`${cards.props} #>> '{source,via}'`,
-        domain: sql<string | null>`CASE WHEN ${cards.props} #>> '{source,via}' = 'web' THEN ${cards.props} #>> '{source,domain}' END`,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(cards)
-      .where(where)
-      .groupBy(sql`1`, sql`2`)
-      .orderBy(desc(sql`count(*)`)),
+      .select({ id: tags.id, name: tags.name, color: tags.color, count: sql<number>`count(${cards.id})::int` })
+      .from(tags)
+      .leftJoin(cardTags, eq(cardTags.tagId, tags.id))
+      .leftJoin(cards, and(eq(cards.id, cardTags.cardId), where))
+      .groupBy(tags.id)
+      .orderBy(asc(tags.name)),
   ]);
-  const sources: Facets["sources"] = [];
-  for (const row of sourceRows) {
-    const filter: SourceFilter | null =
-      row.via === "web"
-        ? row.domain
-          ? { via: "web", domain: row.domain }
-          : null
-        : row.via === "typed" || row.via === "share" || row.via === "upload" || row.via === "book"
-          ? { via: row.via }
-          : null;
-    if (!filter) continue;
-    sources.push({
-      key: filter.via === "web" ? `web:${filter.domain}` : filter.via,
-      label: sourceFacetLabel(filter),
-      via: filter.via,
-      domain: filter.via === "web" ? filter.domain : null,
-      count: row.count,
-    });
-  }
-  return { kinds: kindRows.filter((k) => CARD_TYPES[k.type]), sources };
+  return { kinds: kindRows.filter((k) => CARD_TYPES[k.type]), tags: tagRows };
 }
 
 export interface CardDetail {
@@ -330,6 +318,7 @@ export interface UpdateCardInput {
   type?: string;
   title?: string | null;
   body?: string | null;
+  note?: string | null;
   url?: string | null;
   props?: Record<string, unknown>;
   triaged?: boolean;
@@ -343,6 +332,7 @@ export async function updateCard(
   if (input.type !== undefined && CARD_TYPES[input.type]) patch.type = input.type;
   if (input.title !== undefined) patch.title = input.title;
   if (input.body !== undefined) patch.body = input.body;
+  if (input.note !== undefined) patch.note = input.note;
   if (input.url !== undefined) patch.url = input.url;
   if (input.props !== undefined) patch.props = input.props;
   if (input.triaged !== undefined) patch.triagedAt = input.triaged ? new Date() : null;

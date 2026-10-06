@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSourceKey, sourceKey, sourceLabel, sourceOf } from "./source";
+import { parseSourceKey, sourceKey, sourceOf } from "./source";
 
 describe("sourceOf", () => {
   it("prefers a valid props.source over the url", () => {
@@ -23,14 +23,6 @@ describe("sourceOf", () => {
     expect(sourceOf({ props: {}, url: null })).toEqual({ via: "typed" });
     expect(sourceOf({ props: null, url: "not a url" })).toEqual({ via: "typed" });
     expect(sourceOf({ props: { source: { via: "nope" } }, url: null })).toEqual({ via: "typed" });
-  });
-});
-
-describe("sourceLabel", () => {
-  it("formats book citations with whatever parts exist", () => {
-    expect(sourceLabel({ via: "book", author: "Seneca", work: "Letters", page: "12" })).toBe("Seneca, Letters p.12");
-    expect(sourceLabel({ via: "book", work: "Letters" })).toBe("Letters");
-    expect(sourceLabel({ via: "book", page: "3" })).toBe("book p.3");
   });
 });
 

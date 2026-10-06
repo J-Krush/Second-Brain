@@ -11,6 +11,7 @@ export interface CreatedCard {
   body: string | null;
   url: string | null;
   props: unknown;
+  triagedAt: string | null;
 }
 
 export interface CaptureOptions {

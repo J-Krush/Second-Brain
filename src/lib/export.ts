@@ -6,8 +6,8 @@ import { extForMime } from "./files";
 import { getObjectBytes } from "./r2";
 
 function yamlString(value: string): string {
-  // Quote and escape for a YAML scalar.
-  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  // Quote and escape for a YAML scalar; newlines escaped so a multi-line note stays one value.
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
 }
 
 function frontmatter(
@@ -16,6 +16,7 @@ function frontmatter(
     type: string;
     title: string | null;
     url: string | null;
+    note: string | null;
     createdAt: Date;
     updatedAt: Date;
     triagedAt: Date | null;
@@ -32,6 +33,7 @@ function frontmatter(
   ];
   if (card.triagedAt) lines.push(`triaged: ${card.triagedAt.toISOString()}`);
   if (card.url) lines.push(`url: ${yamlString(card.url)}`);
+  if (card.note) lines.push(`note: ${yamlString(card.note)}`);
   if (cardTagNames.length) lines.push(`tags: [${cardTagNames.join(", ")}]`);
   lines.push("---", "");
   return lines.join("\n");

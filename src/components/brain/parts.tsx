@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { FileRef } from "@/lib/cards";
-import { sourceLabel, type Source } from "@/lib/source";
 import { INLINE_FILE_RE } from "./item";
 
 /** FNV-1a; deterministic so server and client render identical "random" art. */
@@ -77,20 +76,6 @@ export function SiteMark({ label, className = "size-5 text-[10px]" }: { label: s
       aria-hidden
     >
       {letter}
-    </span>
-  );
-}
-
-/** One-line "where did this come from". */
-export function Provenance({ source, className = "" }: { source: Source; className?: string }) {
-  return (
-    <span className={`inline-flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-ink-faint ${className}`}>
-      {source.via === "web" ? (
-        <SiteMark label={source.domain} className="size-3.5 text-[8px]" />
-      ) : (
-        <span className="text-ink-faint/70">↳</span>
-      )}
-      <span className="truncate">{sourceLabel(source)}</span>
     </span>
   );
 }

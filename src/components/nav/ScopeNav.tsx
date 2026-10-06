@@ -16,7 +16,7 @@ const ACTIVE_CLASS = "border-accent text-ink";
 const IDLE_CLASS = "border-transparent text-ink-faint hover:text-ink";
 
 /**
- * Header tabs: the two scopes of `/` plus settings. On the home page the
+ * Header tabs: the two scopes of `/` plus tags and settings. On the home page the
  * scope tabs rewrite only `scope` so filters survive; from any other page
  * they're plain links. The inbox badge is an exact count, refreshed
  * whenever a card changes.
@@ -70,13 +70,16 @@ export function ScopeNav() {
           </Link>
         );
       })}
-      <Link
-        href="/settings"
-        aria-current={pathname === "/settings" ? "page" : undefined}
-        className={`${TAB_CLASS} ${pathname === "/settings" ? ACTIVE_CLASS : IDLE_CLASS}`}
-      >
-        settings
-      </Link>
+      {(["tags", "settings"] as const).map((page) => (
+        <Link
+          key={page}
+          href={`/${page}`}
+          aria-current={pathname === `/${page}` ? "page" : undefined}
+          className={`${TAB_CLASS} ${pathname === `/${page}` ? ACTIVE_CLASS : IDLE_CLASS}`}
+        >
+          {page}
+        </Link>
+      ))}
     </nav>
   );
 }

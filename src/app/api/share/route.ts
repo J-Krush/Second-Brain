@@ -32,8 +32,10 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Text shared alongside a link is the user's comment on it, so it becomes the note.
+  const note = sharedUrl && text && text !== sharedUrl ? text : null;
   const bodyParts: string[] = [];
-  if (text && text !== sharedUrl) bodyParts.push(text);
+  if (!sharedUrl && text) bodyParts.push(text);
   if (embeds.length) bodyParts.push(embeds.join("\n"));
   const body = bodyParts.join("\n\n") || null;
 
@@ -41,6 +43,7 @@ export async function POST(request: NextRequest) {
     type: sharedUrl ? "link" : "thought",
     title,
     body,
+    note,
     url: sharedUrl,
     props: { source: { via: "share" } },
   });

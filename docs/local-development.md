@@ -58,7 +58,7 @@ Log in at `/login`. `⌘J` to capture, `⌘K` to search.
 | --- | --- |
 | Capture, inbox, library, filters, tags, edges, boards, export, GC, reconcile | Fully working against Docker |
 | File upload + thumbnails | Works. MinIO takes the bytes; wrangler's platform proxy emulates the `IMAGES` binding locally, so dimensions and webp variants are generated in dev too |
-| Link OpenGraph capture | Works (plain `fetch`) |
+| Link OpenGraph capture | Works (plain `fetch`), but from a residential IP. Sites that gate datacenter IPs (YouTube serves the Worker a page with no OpenGraph tags) behave differently in production; those go through oEmbed (`OEMBED_ENDPOINT` in `src/lib/og.ts`) |
 | Semantic / hybrid search | Needs embeddings. Without `CF_AI_TOKEN`, cards are not embedded, `mode=semantic` returns 503, and `hybrid` returns `degraded: true` with FTS-only results. The UI shows an amber note |
 | Cron triggers | Not scheduled locally. Call the routes by hand: `curl -X POST -H "Authorization: Bearer $CRON_SECRET" localhost:3001/api/admin/gc`, or use the buttons on `/settings` |
 
