@@ -30,7 +30,7 @@ Stack: TypeScript `strict` + `noUncheckedIndexedAccess`, React 19, Next 16 App R
 - **URL is state.** Scope, view, filters, and the open card live in the query string via `replaceParams()` / `openCard()` in `src/lib/card-url.ts`. Components read `useSearchParams()`; nothing duplicates URL state into React state.
 - **Mutations announce themselves.** After any write, call `emitCardChanged()` (`src/lib/card-events.ts`); the stream, counts, and facets refetch. Do not thread callbacks through props for this.
 - **Overlays portal to `document.body`** and copy the search palette's chrome: centered panel, `bg-surface-2`, `border-line-2`, `rounded-xl`, `shadow-[0_24px_60px_-16px_rgba(0,0,0,0.9)]`, header row in `font-mono text-[10px] uppercase tracking-widest`, `Kbd` hints.
-- **Menus are `FacetMenu`.** Multi for filters, `multi={false}` for pickers. Rows show `glyph label count`; active row is `bg-accent/10 text-accent`.
+- **Menus are `FacetMenu`.** Multi for filters, `multi={false}` for pickers. Rows show `glyph label count`; active row is `bg-accent/10 text-accent`. The one exception is attaching tags, which is `TagPicker` (it searches and creates); reuse it, don't build another.
 - Keyboard first. Every overlay: `↑↓` move, `↵` select, `Esc` close; `Esc` inside a nested menu closes only the menu.
 
 ### Keyboard map (keep current)

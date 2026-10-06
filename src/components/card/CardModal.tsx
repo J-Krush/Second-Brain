@@ -4,24 +4,18 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { CardEditor } from "@/components/CardEditor";
-import { TagEditor } from "@/components/TagEditor";
 import { fmtBytes } from "@/components/brain/item";
 import { Kbd, PdfStack, Waveform, fileUrl, heroOf, isTyping, useToast } from "@/components/brain/parts";
+import { TagPicker } from "@/components/TagPicker";
 import { styleFor } from "@/components/card-style";
 import { emitCardChanged, onCardChanged } from "@/lib/card-events";
 import { cardParam, closeCard } from "@/lib/card-url";
-import type { CardDetail } from "@/lib/cards";
+import type { CardDetail, CardTag } from "@/lib/cards";
 import { relativeTime } from "@/lib/format";
 import { renderMarkdown } from "@/lib/markdown";
 import { sourceOf } from "@/lib/source";
 import { BoardPicker } from "./BoardPicker";
 import { RelationEditor } from "./RelationEditor";
-
-interface TagRef {
-  id: number;
-  name: string;
-  color: string | null;
-}
 
 type Card = CardDetail["card"];
 
@@ -149,7 +143,6 @@ function Hero({ detail }: { detail: CardDetail }) {
 function CardModalPanel({ id }: { id: string }) {
   const [detail, setDetail] = useState<CardDetail | null>(null);
   const [missing, setMissing] = useState(false);
-  const [allTags, setAllTags] = useState<TagRef[]>([]);
   const [editing, setEditing] = useState(false);
   const [picking, setPicking] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -172,14 +165,18 @@ function CardModalPanel({ id }: { id: string }) {
     });
   }, [id, load]);
 
-  useEffect(() => {
-    const ctrl = new AbortController();
-    fetch("/api/tags", { signal: ctrl.signal })
-      .then((r) => (r.ok ? r.json() : { tags: [] }))
-      .then((d: { tags: TagRef[] }) => setAllTags(d.tags))
-      .catch(() => {});
-    return () => ctrl.abort();
-  }, []);
+  // Optimistic; the reload after `emitCardChanged` reconciles (and reverts a failed write).
+  async function setTag(tag: CardTag, action: "attach" | "detach") {
+    setDetail((d) =>
+      d && { ...d, tags: action === "attach" ? [...d.tags, tag] : d.tags.filter((t) => t.id !== tag.id) },
+    );
+    await fetch(`/api/cards/${id}/tags`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tagId: tag.id, action }),
+    }).catch(() => null);
+    emitCardChanged(id);
+  }
 
   // Lock page scroll behind the modal and move focus into it.
   useEffect(() => {
@@ -414,7 +411,12 @@ function CardModalPanel({ id }: { id: string }) {
                   />
                 </div>
               )}
-              <TagEditor key={card.id} cardId={card.id} attached={detail.tags} allTags={allTags} inputRef={tagInputRef} />
+              <TagPicker
+                value={detail.tags}
+                onAdd={(tag) => void setTag(tag, "attach")}
+                onRemove={(tag) => void setTag(tag, "detach")}
+                inputRef={tagInputRef}
+              />
             </Section>
 
             <Section label="Links">

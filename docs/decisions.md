@@ -90,6 +90,14 @@ Model, retrieval mode, passage count and length, answer length, temperature and 
 
 iOS Safari does not implement the manifest `share_target` ([WebKit 194593](https://webkit.org/b/194593)), so the PWA never appears in the iOS share sheet. Capture from iPhone apps goes through an Apple Shortcut (`docs/shortcuts/send-to-brain.plist`, see [`ingestion.md`](ingestion.md)) that posts to `/api/share` with `Accept: application/json`; a native Share Extension was rejected as an Xcode project plus a developer account for one user. Because that token lives on a phone, it is a separate `CAPTURE_TOKEN` that `authorize(request, "capture")` accepts only on the two create routes — never `API_TOKEN`. Share sheets append tracking params, so `canonicalUrl()` normalises every saved URL and `/api/share` returns the existing card instead of a duplicate. Cost: a second secret to rotate, and the Shortcut's source of truth is a plist rather than something the phone edits back.
 
+### D24 · Tags: live facets, one picker that can create, rename merges
+
+The tag filter used to be fed by a server-rendered `listTags()` prop on `/`, so a tag created in the card modal never reached the menu until a full reload. Tags now come from `GET /api/cards/facets` with the other menus and refetch on `emitCardChanged`. Every tag is listed (zero-count ones too) so a selected tag can't vanish from its own menu.
+
+Attaching tags is the one "choose from N" surface that is not `FacetMenu`: it must also create, and it is typed into far more than clicked. `TagPicker` (chips + combobox, all unchosen tags on focus, `create #x` row) is shared by the card modal and the `⌘J` composer. Tagging at capture sets `triaged_at` on insert, consistent with D12.
+
+`/tags` renames and deletes. Renaming onto an existing name (case-insensitive) merges rather than erroring: duplicates like `prepping`/`Prepping` are the main reason to rename. The merge is one SQL statement (data-modifying CTEs) because the codebase has no transactions.
+
 ## Testing and tooling
 
 ### D18 · Small pure test suite, mandatory manual smoke

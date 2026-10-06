@@ -15,11 +15,11 @@ const TAB_CLASS = "flex h-8 items-center border-b-2 px-2 pt-0.5 transition-color
 const ACTIVE_CLASS = "border-accent text-ink";
 const IDLE_CLASS = "border-transparent text-ink-faint hover:text-ink";
 
-const PAGES = ["ask", "settings"] as const;
+const PAGES = ["ask", "tags", "settings"] as const;
 
 /**
- * Header tabs: the two scopes of `/`, then ask and settings. On the home
- * page the scope tabs rewrite only `scope` so filters survive; from any
+ * Header tabs: the two scopes of `/`, then ask, tags and settings. On the
+ * home page the scope tabs rewrite only `scope` so filters survive; from any
  * other page they're plain links. The inbox badge is an exact count,
  * refreshed whenever a card changes.
  */
