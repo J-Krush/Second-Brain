@@ -7,9 +7,10 @@ All routes live under `src/app/api/**/route.ts`, run on the `nodejs` runtime, an
 Every route except `POST /api/auth/login` calls `authorize()`, which accepts either:
 
 - the session cookie set by login (browser), or
-- `Authorization: Bearer <token>` where the token is `API_TOKEN` (capture clients) or `CRON_SECRET` (the cron dispatcher).
+- `Authorization: Bearer <token>` where the token is `API_TOKEN` (capture clients) or `CRON_SECRET` (the cron dispatcher), or
+- `Authorization: Bearer <CAPTURE_TOKEN>` on `POST /api/cards` and `POST /api/share` only.
 
-Both bearer tokens grant the same access as a logged-in session. Unauthorized → `401 {"error":"unauthorized"}`; bad input → `400 {"error":"…"}`; missing → `404`.
+`API_TOKEN` and `CRON_SECRET` grant the same access as a logged-in session. `CAPTURE_TOKEN` is create-only — it lives on a phone (the iOS Shortcut, see [`ingestion.md`](ingestion.md)) and gets `401` everywhere else. Unauthorized → `401 {"error":"unauthorized"}`; bad input → `400 {"error":"…"}`; missing → `404`.
 
 Capturing from a script:
 
@@ -31,7 +32,7 @@ curl -X POST https://<your-worker>/api/cards \
 
 | Method | Path | Body / query | Notes |
 | --- | --- | --- | --- |
-| `POST` | `/api/cards` | `{ type?, title?, body?, url?, props? }` | `type` defaults to `thought`; unknown types are rejected. To capture a link send `type: "link"` and `url` (the browser composer derives these from a leading URL; the API does not). Server stamps `props.source`, syncs inline file refs, then `after()` runs OG capture (links) and embedding. `201 { card }` |
+| `POST` | `/api/cards` | `{ type?, title?, body?, url?, props? }` | Accepts `CAPTURE_TOKEN`. `type` defaults to `thought`; unknown types are rejected. To capture a link send `type: "link"` and `url` (the browser composer derives these from a leading URL; the API does not). `url` is canonicalised (tracking params and fragment dropped, YouTube forms unified; same on `PATCH`). Server stamps `props.source`, syncs inline file refs, then `after()` runs OG capture (links) and embedding. `201 { card }` |
 | `GET` | `/api/cards` | `?view=inbox\|library&type=a,b&source=k1,k2&tag=1,2&order=asc\|desc&cursor=` | Keyset pagination on `(created_at, id)`; `nextCursor` is `"<iso>\|<uuid>"`. Filters are comma lists, OR within a key, AND across. Source keys: `typed`, `share`, `upload`, `book`, `web:<domain>` |
 | `GET` | `/api/cards/count` | — | `{ inbox }` exact untriaged count |
 | `GET` | `/api/cards/facets` | `?view=inbox\|library` | `{ kinds: [{type,count}], sources: [{key,label,via,domain,count}] }` scoped to the view only |
@@ -78,11 +79,11 @@ curl -X POST https://<your-worker>/api/cards \
 
 Client helper: `src/lib/upload-client.ts` does hash → presign → PUT → confirm.
 
-## Share target and export
+## Share and export
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `POST` | `/api/share` | `multipart/form-data` with `title`, `text`, `url`, `files[]` (images) — the PWA share-sheet target declared in `public/manifest.webmanifest`. Creates a card with `props.source.via = "share"`, ingests images, 303-redirects to it |
+| `POST` | `/api/share` | Accepts `CAPTURE_TOKEN`. `multipart/form-data` with `title`, `text`, `url`, `files[]` (images) — the Android PWA share target (`public/manifest.webmanifest`) and the iOS Shortcut. The link is `url`, else the first `http(s)` URL in `text` (removed from the body). A link whose canonical URL already belongs to a live card returns that card instead of a duplicate, unless images are attached. Creates a card with `props.source.via = "share"`. With `Accept: application/json`: `201 { card, existing: false }` or `200 { card, existing: true }`; otherwise 303 to `/cards/:id` |
 | `GET` | `/api/export` | Streams a zip: every card as markdown with YAML front-matter (id, type, title, tags, …) plus every referenced file |
 
 ## Maintenance

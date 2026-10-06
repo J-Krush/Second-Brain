@@ -10,5 +10,6 @@ Reference material for people and coding agents working on Second Brain. The pro
 | [`decisions.md`](decisions.md) | You are about to change something foundational and want to know why it is the way it is; or you just made such a change and need to record it |
 | [`conventions.md`](conventions.md) | You are writing code — rules, patterns, UI system, keyboard map, how to add a migration or a route |
 | [`api.md`](api.md) | You are calling or extending the HTTP API (including from a non-browser capture client) |
+| [`ingestion.md`](ingestion.md) | You are setting up the iPhone share sheet or wondering why a shared link looks the way it does |
 
 Keep these current. A doc that describes the previous design is worse than no doc: when a PR changes behaviour described here, the same PR updates the page.

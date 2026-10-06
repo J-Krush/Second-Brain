@@ -147,10 +147,10 @@ export function GlobalSearch() {
         onClick={() => setOpen(true)}
         aria-label="Search"
         aria-keyshortcuts="Meta+K"
-        className="flex h-8 w-full max-w-xs items-center gap-2 rounded-md border border-line bg-surface px-2.5 font-mono text-[12px] text-ink-faint transition-colors hover:border-line-2 hover:text-ink"
+        className="flex h-8 w-full min-w-0 max-w-xs items-center gap-2 rounded-md border border-line bg-surface px-2.5 font-mono text-[12px] text-ink-faint transition-colors hover:border-line-2 hover:text-ink"
       >
         <span>&gt;</span>
-        <span className="flex-1 text-left">search…</span>
+        <span className="hidden flex-1 text-left sm:block">search…</span>
         <span className="hidden items-center gap-1 sm:flex">
           <Kbd>⌘</Kbd>
           <Kbd>K</Kbd>

@@ -56,36 +56,77 @@ async function ingestRemoteImage(imageUrl: string): Promise<string | null> {
   }
 }
 
+interface Preview {
+  og: OgData;
+  imageUrl?: string;
+}
+
+// youtube.com/oembed field subset; no key required.
+interface YoutubeOembed {
+  title?: string;
+  author_name?: string;
+  thumbnail_url?: string;
+}
+
+const YOUTUBE_HOSTS: Record<string, true> = {
+  "youtube.com": true,
+  "www.youtube.com": true,
+  "m.youtube.com": true,
+  "youtu.be": true,
+};
+
+// Instagram serves a login wall with `<title>Instagram</title>` and no OG tags
+// to every non-browser client, so fetching would only overwrite nothing with
+// noise. The card keeps its URL and whatever the share sheet sent.
+const NO_PREVIEW_HOSTS: Record<string, true> = {
+  "instagram.com": true,
+  "www.instagram.com": true,
+};
+
+async function pagePreview(url: string): Promise<Preview | null> {
+  const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
+  if (!res.ok) return null;
+  const root = parse(await res.text());
+  const imageUrl = metaContent(root, ["og:image", "twitter:image"]);
+  return {
+    og: {
+      title: metaContent(root, ["og:title", "twitter:title"]) ?? root.querySelector("title")?.text?.trim(),
+      description: metaContent(root, ["og:description", "twitter:description", "description"]),
+    },
+    imageUrl: imageUrl ? new URL(imageUrl, url).toString() : undefined,
+  };
+}
+
+// YouTube's watch page is a consent wall from many datacenter IPs; oEmbed is a
+// stable JSON contract that works from anywhere.
+async function youtubePreview(url: string): Promise<Preview | null> {
+  const res = await fetchWithTimeout(
+    `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`,
+    FETCH_TIMEOUT_MS,
+  );
+  if (!res.ok) return null;
+  const data = (await res.json()) as YoutubeOembed;
+  return { og: { title: data.title, description: data.author_name }, imageUrl: data.thumbnail_url };
+}
+
 /**
- * Fetch a link card's URL, parse OpenGraph/meta, cache the OG image in R2, and
- * write the metadata into the card's props. Runs after save (via after()), so
- * capture stays instant.
+ * Fetch a link card's preview (YouTube via oEmbed, everything else via
+ * OpenGraph/meta), cache the image in R2, and write the metadata into the
+ * card's props. Runs after save (via after()), so capture stays instant.
  */
 export async function captureLink(cardId: string, url: string): Promise<void> {
   try {
-    const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
-    if (!res.ok) return;
-    const html = await res.text();
-    const root = parse(html);
+    const host = new URL(url).hostname;
+    if (NO_PREVIEW_HOSTS[host]) return;
+    const preview = (YOUTUBE_HOSTS[host] ? await youtubePreview(url) : null) ?? (await pagePreview(url));
+    if (!preview) return;
+    const { og, imageUrl } = preview;
 
-    const og: OgData = {
-      title:
-        metaContent(root, ["og:title", "twitter:title"]) ??
-        root.querySelector("title")?.text?.trim(),
-      description: metaContent(root, [
-        "og:description",
-        "twitter:description",
-        "description",
-      ]),
-    };
-
-    const imageUrl = metaContent(root, ["og:image", "twitter:image"]);
     if (imageUrl) {
-      const absolute = new URL(imageUrl, url).toString();
-      const fileId = await ingestRemoteImage(absolute);
+      const fileId = await ingestRemoteImage(imageUrl);
       if (fileId) {
         og.image = fileId;
-        og.sourceUrl = absolute;
+        og.sourceUrl = imageUrl;
         await clearRole(cardId, "og_cache");
         await setRef(fileId, cardId, "og_cache");
       }

@@ -14,14 +14,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 border-b border-line bg-base/80 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-[96rem] items-center gap-5 px-6 lg:px-10">
+        <div className="mx-auto flex h-14 max-w-[96rem] items-center gap-3 px-4 sm:gap-5 sm:px-6 lg:px-10">
           <Link href="/" className="flex-none font-display text-lg font-bold tracking-tight text-ink">
-            <span className="text-accent">&gt;</span> second brain
+            <span className="text-accent">&gt;</span>
+            <span className="hidden sm:inline"> second brain</span>
           </Link>
           <Suspense fallback={null}>
             <ScopeNav />
           </Suspense>
-          <div className="ml-auto flex w-full max-w-xs justify-end">
+          <div className="ml-auto flex min-w-0 w-full max-w-xs justify-end">
             <Suspense fallback={null}>
               <GlobalSearch />
             </Suspense>

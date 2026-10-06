@@ -47,7 +47,10 @@ export function ScopeNav() {
   }, []);
 
   return (
-    <nav className="flex items-center gap-1 font-mono text-[13px] uppercase tracking-widest" aria-label="scope">
+    <nav
+      className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-wider sm:text-[13px] sm:tracking-widest"
+      aria-label="scope"
+    >
       {SCOPES.map((scope) => {
         const next = new URLSearchParams(onHome ? params : undefined);
         next.delete("card");
