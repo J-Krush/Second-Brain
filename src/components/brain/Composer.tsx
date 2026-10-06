@@ -278,7 +278,7 @@ export function Composer({
         </ul>
       )}
 
-      <div className="mt-2 flex items-center gap-1 border-t border-line px-2 py-1.5 font-mono text-[11px] text-ink-faint">
+      <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-line px-2 py-1.5 font-mono text-[11px] text-ink-faint">
         <label className="cursor-pointer rounded px-2 py-1 hover:bg-surface-2 hover:text-ink">
           ⎘ file
           <input
@@ -334,7 +334,7 @@ export function Composer({
           type="button"
           onClick={() => void submit()}
           disabled={!ready}
-          className="ml-2 rounded-md bg-accent px-3 py-1 font-bold uppercase tracking-widest text-inset transition disabled:bg-surface-2 disabled:text-ink-faint"
+          className="ml-auto rounded-md bg-accent px-3 py-1 font-bold uppercase tracking-widest text-inset transition disabled:bg-surface-2 disabled:text-ink-faint sm:ml-2"
         >
           {busy ? "…" : "capture"}
         </button>

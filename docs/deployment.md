@@ -52,7 +52,8 @@ Repo secrets (Settings → Secrets → Actions, or `gh secret set`):
 | `DATABASE_URL` | Neon direct URL; migrations only |
 | `APP_PASSWORD_HASH` | `pnpm hash-password "…"` |
 | `SESSION_SECRET` | `openssl rand -hex 32` |
-| `API_TOKEN` | Bearer for non-browser capture (menu-bar app, iOS Shortcut) |
+| `API_TOKEN` | Full-access bearer for non-browser clients (menu-bar app, scripts) |
+| `CAPTURE_TOKEN` | Create-only bearer for the iOS Shortcut; accepted by `POST /api/cards` and `POST /api/share` only ([`ingestion.md`](ingestion.md)) |
 | `CRON_SECRET` | Bearer the cron dispatcher in `worker.ts` presents to `/api/admin/*` |
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | S3 credentials for the bucket |
 

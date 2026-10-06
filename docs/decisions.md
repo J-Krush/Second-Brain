@@ -78,6 +78,10 @@ The header uses `backdrop-blur`, which creates a containing block that clips `po
 
 Clicking anywhere on a link card used to leave the site. Now the card body opens the detail modal like every other kind; only the small `domain ↗` line (and the URL inside the modal) go external. Consistency beats one saved click.
 
+### D21 · iOS capture is a Shortcut, not the PWA share target
+
+iOS Safari does not implement the manifest `share_target` ([WebKit 194593](https://webkit.org/b/194593)), so the PWA never appears in the iOS share sheet. Capture from iPhone apps goes through an Apple Shortcut (`docs/shortcuts/send-to-brain.plist`, see [`ingestion.md`](ingestion.md)) that posts to `/api/share` with `Accept: application/json`; a native Share Extension was rejected as an Xcode project plus a developer account for one user. Because that token lives on a phone, it is a separate `CAPTURE_TOKEN` that `authorize(request, "capture")` accepts only on the two create routes — never `API_TOKEN`. Share sheets append tracking params, so `canonicalUrl()` normalises every saved URL and `/api/share` returns the existing card instead of a duplicate. Cost: a second secret to rotate, and the Shortcut's source of truth is a plist rather than something the phone edits back.
+
 ## Testing and tooling
 
 ### D18 · Small pure test suite, mandatory manual smoke

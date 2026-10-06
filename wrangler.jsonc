@@ -38,7 +38,7 @@
   "triggers": {
     "crons": ["0 4 * * *", "15 * * * *"]
   },
-  // Non-secret config. Secrets (APP_PASSWORD_HASH, SESSION_SECRET, API_TOKEN,
+  // Non-secret config. Secrets (APP_PASSWORD_HASH, SESSION_SECRET, API_TOKEN, CAPTURE_TOKEN,
   // CRON_SECRET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY) are GitHub repo secrets
   // that the deploy workflow ships with each deploy (`--secrets-file`);
   // `.dev.vars` holds local values for `pnpm preview`.

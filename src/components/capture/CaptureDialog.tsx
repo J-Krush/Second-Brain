@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { replaceParams } from "@/lib/card-url";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Composer } from "@/components/brain/Composer";
@@ -10,7 +11,8 @@ import { registerCaptureDialog, type CaptureOptions, type CreatedCard } from "@/
 /**
  * ⌘J (Ctrl+J elsewhere) opens the composer in the same overlay as search.
  * Mounted once in the app layout; the board canvas opens it through the
- * capture bus to place the new card itself.
+ * capture bus to place the new card itself. The home-screen app launches with
+ * `?capture=1` (manifest `start_url`), which opens it once and is then dropped.
  */
 export function CaptureDialog() {
   const router = useRouter();
@@ -20,6 +22,12 @@ export function CaptureDialog() {
 
   const show = useCallback((options: CaptureOptions) => setOpts(options), []);
   useEffect(() => registerCaptureDialog(show), [show]);
+
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has("capture")) return;
+    setOpts({});
+    replaceParams({ capture: null });
+  }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
