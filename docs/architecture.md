@@ -29,7 +29,7 @@ flowchart LR
 
 ## Domain model in one paragraph
 
-Everything is a row in `cards` with a `type` (`thought`, `quote`, `link`, `video`, `document`, `project`, `board`, `mantra`) and a JSONB `props` bag for type-specific data (tldraw snapshot for boards, OpenGraph metadata for links, `source` provenance for everything). Boards are cards; a card appears on a board through a row in `placements` (`board_id`, `card_id`, `x`, `y`, `w`, `h`, `z`), so membership is many-to-many and nesting is free. `edges` are labelled, described, directed links between cards. `tags`/`card_tags` are flat. `files` + `file_refs` form a reference ledger that drives garbage collection. `triaged_at` separates the inbox (null) from the library. There is deliberately **no `parent_id`**.
+Everything is a row in `cards` with a `type` (`thought`, `quote`, `link`, `video`, `document`, `project`, `board`, `mantra`) and a JSONB `props` bag for type-specific data (tldraw snapshot for boards, OpenGraph metadata for links, `source` provenance for everything). Boards are cards; a card appears on a board through a row in `placements` (`board_id`, `card_id`, `x`, `y`, `w`, `h`, `z`), so membership is many-to-many and nesting is free. `edges` are labelled, described, directed links between cards. `tags`/`card_tags` are flat. `files` + `file_refs` form a reference ledger that drives garbage collection. `triaged_at` separates the inbox (null) from the library. There is deliberately **no `parent_id`**. `settings` is a key → JSONB document store, one row per feature (`ask` today), read through `src/lib/settings.ts` with zod filling defaults.
 
 ## Capture path
 
@@ -52,14 +52,16 @@ Upload is client-driven and dedupes on content hash: the client computes sha256 
 
 ## Ask
 
-`POST /api/ask` (`src/lib/ask.ts`, seam in `src/lib/llm.ts`) is retrieval-augmented answering over cards:
+`POST /api/ask` (`src/lib/ask.ts`, seam in `src/lib/llm.ts`) is retrieval-augmented answering over cards. Every knob comes from the `ask` settings document (`src/lib/ask-config.ts`, stored in the `settings` table, edited on `/settings`):
 
-1. `searchHybrid` with `match: "any"` (lexemes ORed; "what do I know about X" must not require a card to contain "know") and `limit: 8`.
-2. Hits become numbered passages — title, kind, url, excerpt capped at 1500 chars with inline image embeds stripped.
-3. `buildMessages()` packs them with a system prompt that demands `[n]` citations and an honest "not in your notes".
-4. The `LlmProvider` selected by `LLM_PROVIDER` streams text deltas; `parseCitations()` extracts the distinct `[n]` on completion.
+1. Retrieval per `retrieval` (hybrid / fts / semantic) with `match` (`any` by default: lexemes ORed, so "what do I know about X" doesn't require a card to contain "know") and `sourceLimit` hits.
+2. Hits become numbered passages — title, kind, url, excerpt capped at `excerptChars` with inline image embeds stripped.
+3. `buildMessages()` packs them under `systemPrompt`, which demands `[n]` citations and an honest "not in your notes".
+4. The `LlmProvider` for `provider`/`model` streams text deltas with `maxTokens` and `temperature`; `parseCitations()` extracts the distinct `[n]` on completion.
 
-The route emits NDJSON events (`sources` → `delta`… → `done` | `error`). The first event is awaited before the response is committed, so streaming never touches the request-scoped DB pool. `LlmProvider` is the only model-facing surface: `{ id, model, generate({ messages, maxTokens, signal }) → AsyncIterable<string> }`, registered in `PROVIDERS` in `llm.ts`. Unset `LLM_PROVIDER` means the page runs retrieval-only and says so; an unknown value is an `error` event.
+The route emits NDJSON events (`sources` → `delta`… → `done` | `error`). The first event is awaited before the response is committed, so streaming never touches the request-scoped DB pool. `LlmProvider` is the only model-facing surface: `{ id, model, generate({ messages, maxTokens, temperature, signal }) → AsyncIterable<string> }`, one factory per provider id in `PROVIDERS` in `llm.ts`. `provider: "none"` runs retrieval-only and the page says so.
+
+The one provider today is Workers AI (`src/lib/llm-workers-ai.ts`): `stream: true` through the `AI` binding in the Worker or the REST API in dev, both yielding the same SSE body, parsed by `sseDeltas()` across the three event shapes Cloudflare models emit. `src/lib/workers-ai.ts` is the shared door (binding probe, REST call, `workersAiConfigured()`) for embeddings and generation alike. The settings page prices the current knobs from the neuron table in `ask-config.ts` (worst case: every passage full, answer at `maxTokens`).
 
 ## Front end
 
@@ -71,6 +73,7 @@ The route emits NDJSON events (`sources` → `delta`… → `done` | `error`). T
 | Capture | `components/capture/CaptureDialog.tsx`, `components/brain/Composer.tsx`, `lib/capture-bus.ts` | `⌘J` toggles the dialog; `openCapture({ onCreated })` lets a board canvas receive the new card and place it |
 | Card | `components/card/CardModal.tsx` (+ `CardEditor`, `RelationEditor`, `BoardPicker`) | `?card=<id>` opens it; back button closes. Triage hotkeys `e` archive, `b` file to board, `t` tag |
 | Ask | `components/ask/AskPage.tsx` | Client-side thread of exchanges; reads the NDJSON stream, renders the answer as markdown with `[n]` rewritten to `<a data-cite>` pills, and mounts `CardModal` so citations and source rows open cards in place (`?card=`) without losing the thread. `stop` aborts the fetch and keeps the partial answer |
+| Settings | `app/(app)/settings/page.tsx`, `components/AdminActions.tsx`, `components/settings/AskSettings.tsx` | Maintenance buttons, then the `/ask` knobs: each change PUTs a one-key patch (debounced 500 ms) to `/api/settings/ask`; the cost strip is `estimateCost()` over the draft, so it reprices before the save lands |
 | Boards | `components/board/BoardCanvas.tsx`, `CardShape.tsx` | tldraw with a custom shape per placed card. Placements are authoritative; native tldraw shapes (arrows, scribbles) persist as a filtered snapshot in the board card's `props` |
 
 Styling is Tailwind v4 with design tokens in `src/app/globals.css` (dark ink surfaces, acid `#B6FF2E` accent, Bricolage Grotesque / Space Grotesk / JetBrains Mono). Card types get distinct typography in `components/card-style.ts`.

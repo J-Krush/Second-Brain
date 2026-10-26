@@ -27,7 +27,7 @@ Fill in `.env.local`:
 | `CRON_SECRET` | Any long random string; lets you call `/api/admin/*` by hand |
 | `R2_*` | Leave the MinIO defaults from the example (`minioadmin`/`minioadmin`, bucket `secondbrain-dev`, endpoint `http://localhost:9000`). `docker compose` creates the bucket |
 | `CF_ACCOUNT_ID`, `CF_AI_TOKEN` | Optional. Set them to get real embeddings in dev via the Workers AI REST API; create the token in the Cloudflare dashboard under Workers AI → *Use REST API* |
-| `LLM_PROVIDER` | Leave unset. `/ask` then runs retrieval-only and shows the passages a model would read. Providers are registered in `src/lib/llm.ts` |
+| — | `/ask` needs no extra env: the model and every knob are chosen on `/settings`. Without `CF_*` an answer fails with `CF_ACCOUNT_ID / CF_AI_TOKEN not set` shown in the thread; set the provider to *Off* for a retrieval-only preview |
 
 Then:
 
@@ -61,7 +61,7 @@ Log in at `/login`. `⌘J` to capture, `⌘K` to search.
 | File upload + thumbnails | Works. MinIO takes the bytes; wrangler's platform proxy emulates the `IMAGES` binding locally, so dimensions and webp variants are generated in dev too |
 | Link OpenGraph capture | Works (plain `fetch`) |
 | Semantic / hybrid search | Needs embeddings. Without `CF_AI_TOKEN`, cards are not embedded, `mode=semantic` returns 503, and `hybrid` returns `degraded: true` with FTS-only results. The UI shows an amber note |
-| Ask | Retrieval works (FTS-only without embeddings). An answer needs `LLM_PROVIDER` set to a registered provider; unset, the page says `no model · retrieval only` |
+| Ask | Retrieval works (FTS-only without embeddings). An answer needs Workers AI: in dev that's `CF_ACCOUNT_ID` + `CF_AI_TOKEN`; in prod the `AI` binding. Provider *Off* on `/settings` makes the page a retrieval preview |
 | Cron triggers | Not scheduled locally. Call the routes by hand: `curl -X POST -H "Authorization: Bearer $CRON_SECRET" localhost:3001/api/admin/gc`, or use the buttons on `/settings` |
 
 ## Database
@@ -83,7 +83,7 @@ Console at <http://localhost:9001> (`minioadmin` / `minioadmin`). The app uses p
 
 - **Port 3001**, not 3000, to stay out of the way of other Next apps on the same machine.
 - `AGENTS.md` starts with a block that `next dev` regenerates. It is committed verbatim so the tree stays clean; if a Next upgrade rewrites it, commit the new block with your change rather than fighting it. `CLAUDE.md` is just `@AGENTS.md`.
-- `next dev` runs with `remoteBindings: false`: the `AI` binding is a stub that throws. Code must probe for a working binding rather than assume one (see `aiBinding()` in `src/lib/embeddings.ts`); `IMAGES` and `HYPERDRIVE` are emulated locally.
+- `next dev` runs with `remoteBindings: false`: the `AI` binding is a stub that throws. Code must probe for a working binding rather than assume one (see `aiBinding()` in `src/lib/workers-ai.ts`); `IMAGES` and `HYPERDRIVE` are emulated locally.
 - The DB client is a `Proxy` that resolves a pool per request context. Never cache a `db` reference across requests or in module scope; import `{ db }` and use it inside the handler.
 - `⌘N` is reserved by every browser, which is why capture is `⌘J`.
 - Sessions are stateless (sealed cookie, no table), so resetting the database does not log you out and changing `SESSION_SECRET` logs everyone out.
