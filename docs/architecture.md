@@ -50,15 +50,27 @@ Upload is client-driven and dedupes on content hash: the client computes sha256 
 - **semantic** — cosine distance over `embedding` using the HNSW index; 503 if no embedding provider is configured.
 - **hybrid** (default) — fts and semantic in parallel, merged with reciprocal rank fusion (`src/lib/rrf.ts`, k = 60). Returns `degraded: true` when it had to fall back to fts alone; the UI shows an amber note.
 
+## Ask
+
+`POST /api/ask` (`src/lib/ask.ts`, seam in `src/lib/llm.ts`) is retrieval-augmented answering over cards:
+
+1. `searchHybrid` with `match: "any"` (lexemes ORed; "what do I know about X" must not require a card to contain "know") and `limit: 8`.
+2. Hits become numbered passages — title, kind, url, excerpt capped at 1500 chars with inline image embeds stripped.
+3. `buildMessages()` packs them with a system prompt that demands `[n]` citations and an honest "not in your notes".
+4. The `LlmProvider` selected by `LLM_PROVIDER` streams text deltas; `parseCitations()` extracts the distinct `[n]` on completion.
+
+The route emits NDJSON events (`sources` → `delta`… → `done` | `error`). The first event is awaited before the response is committed, so streaming never touches the request-scoped DB pool. `LlmProvider` is the only model-facing surface: `{ id, model, generate({ messages, maxTokens, signal }) → AsyncIterable<string> }`, registered in `PROVIDERS` in `llm.ts`. Unset `LLM_PROVIDER` means the page runs retrieval-only and says so; an unknown value is an `error` event.
+
 ## Front end
 
 | Area | Files | Notes |
 | --- | --- | --- |
-| Header | `src/app/(app)/layout.tsx`, `components/nav/ScopeNav.tsx`, `components/search/GlobalSearch.tsx`, `components/capture/AddButton.tsx` | Tabs `inbox · library · settings`, the `⌘K` palette, the `+ Add ⌘J` button. The search and capture overlays are portaled to `document.body` because the header's `backdrop-blur` would clip fixed children |
+| Header | `src/app/(app)/layout.tsx`, `components/nav/ScopeNav.tsx`, `components/search/GlobalSearch.tsx`, `components/capture/AddButton.tsx` | Tabs `inbox · library · ask · settings`, the `⌘K` palette, the `+ Add ⌘J` button. The search and capture overlays are portaled to `document.body` because the header's `backdrop-blur` would clip fixed children |
 | Stream | `components/brain/BrainPage.tsx` | Owns URL state (`scope`, `view`, `type`, `source`, `tag`, `card`), fetches `/api/cards` and `/api/cards/facets`, renders `Shell` (filter row) + `Timeline` or `Desk` |
 | Filters | `components/brain/FacetMenu.tsx`, `Shell.tsx` | One control for kind/source/tag (multi) and for the composer's kind picker (single) |
 | Capture | `components/capture/CaptureDialog.tsx`, `components/brain/Composer.tsx`, `lib/capture-bus.ts` | `⌘J` toggles the dialog; `openCapture({ onCreated })` lets a board canvas receive the new card and place it |
 | Card | `components/card/CardModal.tsx` (+ `CardEditor`, `RelationEditor`, `BoardPicker`) | `?card=<id>` opens it; back button closes. Triage hotkeys `e` archive, `b` file to board, `t` tag |
+| Ask | `components/ask/AskPage.tsx` | Client-side thread of exchanges; reads the NDJSON stream, renders the answer as markdown with `[n]` rewritten to `<a data-cite>` pills, and mounts `CardModal` so citations and source rows open cards in place (`?card=`) without losing the thread. `stop` aborts the fetch and keeps the partial answer |
 | Boards | `components/board/BoardCanvas.tsx`, `CardShape.tsx` | tldraw with a custom shape per placed card. Placements are authoritative; native tldraw shapes (arrows, scribbles) persist as a filtered snapshot in the board card's `props` |
 
 Styling is Tailwind v4 with design tokens in `src/app/globals.css` (dark ink surfaces, acid `#B6FF2E` accent, Bricolage Grotesque / Space Grotesk / JetBrains Mono). Card types get distinct typography in `components/card-style.ts`.

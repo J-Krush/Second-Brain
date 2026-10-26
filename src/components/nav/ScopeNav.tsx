@@ -15,11 +15,13 @@ const TAB_CLASS = "flex h-8 items-center border-b-2 px-2 pt-0.5 transition-color
 const ACTIVE_CLASS = "border-accent text-ink";
 const IDLE_CLASS = "border-transparent text-ink-faint hover:text-ink";
 
+const PAGES = ["ask", "settings"] as const;
+
 /**
- * Header tabs: the two scopes of `/` plus settings. On the home page the
- * scope tabs rewrite only `scope` so filters survive; from any other page
- * they're plain links. The inbox badge is an exact count, refreshed
- * whenever a card changes.
+ * Header tabs: the two scopes of `/`, then ask and settings. On the home
+ * page the scope tabs rewrite only `scope` so filters survive; from any
+ * other page they're plain links. The inbox badge is an exact count,
+ * refreshed whenever a card changes.
  */
 export function ScopeNav() {
   const pathname = usePathname();
@@ -70,13 +72,19 @@ export function ScopeNav() {
           </Link>
         );
       })}
-      <Link
-        href="/settings"
-        aria-current={pathname === "/settings" ? "page" : undefined}
-        className={`${TAB_CLASS} ${pathname === "/settings" ? ACTIVE_CLASS : IDLE_CLASS}`}
-      >
-        settings
-      </Link>
+      {PAGES.map((page) => {
+        const active = pathname === `/${page}`;
+        return (
+          <Link
+            key={page}
+            href={`/${page}`}
+            aria-current={active ? "page" : undefined}
+            className={`${TAB_CLASS} ${active ? ACTIVE_CLASS : IDLE_CLASS}`}
+          >
+            {page}
+          </Link>
+        );
+      })}
     </nav>
   );
 }

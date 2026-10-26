@@ -17,6 +17,7 @@ Everything you capture — a thought, a quote, a link, a photo, a PDF, a mantra,
 | **Library** | `/?scope=library` | Every card. Filters are three multi-select menus — kind, source (typed / web domain / shared / uploaded / book), tag — with live counts; state lives in the URL |
 | **Search** | `⌘K` or `/` | Quick (typo-tolerant trigram), full-text (`tsvector`), semantic (pgvector), or hybrid (reciprocal rank fusion). Degrades to full-text when no embeddings exist |
 | **Boards** | `/boards/:id` | tldraw canvas with custom card shapes rendering real card content. Placements are many-to-many; boards are cards, so they nest |
+| **Ask** | `/ask` | Question in, answer out, every claim cited `[n]` back to a card. Retrieval is hybrid search; the model is pluggable behind `LLM_PROVIDER`. With no model configured it shows the passages a model would read |
 | **Settings** | `/settings` | Export everything (zip of markdown + files), run GC, reconcile storage, embed stale cards, sign out |
 
 ## Stack at a glance

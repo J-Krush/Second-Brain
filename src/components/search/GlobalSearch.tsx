@@ -25,6 +25,8 @@ interface SearchResponse {
 }
 
 const DEBOUNCE_MS = 180;
+// Pages that mount <CardModal />; elsewhere a hit navigates home to open it.
+const MODAL_PAGES = new Set(["/", "/ask"]);
 
 function snippet(hit: Hit): string {
   if (hit.title) return hit.title;
@@ -111,8 +113,8 @@ export function GlobalSearch() {
     (hit: Hit) => {
       close();
       if (hit.type === "board") router.push(`/boards/${hit.id}`);
-      // The detail modal lives on `/`; elsewhere (e.g. a board) navigate there.
-      else if (pathname === "/") openCard(hit.id);
+      // The detail modal lives on pages that mount it; elsewhere navigate home.
+      else if (MODAL_PAGES.has(pathname)) openCard(hit.id);
       else router.push(`/?card=${hit.id}`);
     },
     [close, pathname, router],

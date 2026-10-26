@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
   const filters: SearchFilters = {
     type: sp.get("type") ?? undefined,
     tagId: tagIdRaw ? Number(tagIdRaw) : undefined,
+    match: sp.get("match") === "any" ? "any" : "all",
   };
 
   // Semantic requires embeddings; without a key, say so rather than fake it.

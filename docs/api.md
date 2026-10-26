@@ -44,7 +44,13 @@ curl -X POST https://<your-worker>/api/cards \
 
 | Method | Path | Query | Notes |
 | --- | --- | --- | --- |
-| `GET` | `/api/search` | `?q=&mode=quick\|fts\|semantic\|hybrid&type=&tag=` | `{ mode, hits, degraded }`. Default `hybrid`. `semantic` → `503 {"error":"embeddings not configured"}` when no provider; `hybrid` silently falls back to FTS with `degraded: true` |
+| `GET` | `/api/search` | `?q=&mode=quick\|fts\|semantic\|hybrid&type=&tag=&match=all\|any` | `{ mode, hits, degraded }`. Default `hybrid`. `semantic` → `503 {"error":"embeddings not configured"}` when no provider; `hybrid` silently falls back to FTS with `degraded: true`. `match=any` ORs the query's lexemes (fts/hybrid only); default requires every term |
+
+## Ask
+
+| Method | Path | Body | Notes |
+| --- | --- | --- | --- |
+| `POST` | `/api/ask` | `{ question (1–2000 chars), type?, tag? }` | Streams `application/x-ndjson`, one `AskEvent` per line: first `{type:"sources", sources[], degraded, model}` (8 hits max, `match=any` hybrid; `model` is `null` when `LLM_PROVIDER` is unset), then `{type:"delta", text}`… and `{type:"done", citations[]}`, or `{type:"error", message}`. Each source has `index` (1-based, what the answer cites as `[n]`), `id`, `type`, `title`, `excerpt` (≤1500 chars, image embeds stripped), `url`, `createdAt`, `score`. Retrieval finishes before the response is committed; without a model, `done` follows `sources` immediately |
 
 ## Tags and edges
 
