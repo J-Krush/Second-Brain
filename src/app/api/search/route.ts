@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { embeddingsConfigured } from "@/lib/embeddings";
 import {
   searchFts,
   searchHybrid,
@@ -9,6 +8,7 @@ import {
   type SearchMode,
 } from "@/lib/search";
 import { authorize, unauthorized } from "@/lib/route-helpers";
+import { workersAiConfigured } from "@/lib/workers-ai";
 
 export const runtime = "nodejs";
 
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   };
 
   // Semantic requires embeddings; without a key, say so rather than fake it.
-  if (mode === "semantic" && !embeddingsConfigured()) {
+  if (mode === "semantic" && !workersAiConfigured()) {
     return NextResponse.json(
       { error: "embeddings not configured", mode, hits: [] },
       { status: 503 },

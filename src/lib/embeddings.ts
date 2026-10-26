@@ -1,9 +1,8 @@
 import { createHash } from "node:crypto";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cards } from "@/db/schema";
-import { env } from "./env";
+import { aiBinding, aiRest, workersAiConfigured } from "./workers-ai";
 
 /**
  * Single module wrapping the embedding provider so it stays swappable. The
@@ -14,26 +13,6 @@ export const EMBEDDING_DIMS = 1024;
 const MODEL = "@cf/baai/bge-m3";
 // bge-m3 accepts 8192 tokens; ~4 chars/token, cap generously.
 const MAX_CHARS = 24000;
-
-// Boundary type for the Workers AI binding (wrangler.jsonc `ai`).
-interface AiEnv {
-  AI?: { run(model: string, input: { text: string[] }): Promise<{ data: number[][] }> };
-}
-
-/**
- * The binding in the deployed Worker. Under `next dev` remote bindings are off
- * and wrangler hands back a stub that throws, so dev skips it and falls back
- * to REST (CF_* vars) or, with neither, to FTS-only search.
- */
-function aiBinding(): AiEnv["AI"] {
-  if (process.env.NODE_ENV === "development") return undefined;
-  const { env: cfEnv } = getCloudflareContext() as { env: AiEnv };
-  return cfEnv.AI;
-}
-
-export function embeddingsConfigured(): boolean {
-  return Boolean(aiBinding() || (env.CF_ACCOUNT_ID && env.CF_AI_TOKEN));
-}
 
 export function contentHash(title: string | null, body: string | null): string {
   return createHash("sha256")
@@ -59,20 +38,7 @@ export async function embedText(text: string): Promise<number[]> {
     if (!vector) throw new Error("Workers AI embedding returned no vector");
     return vector;
   }
-  if (!env.CF_ACCOUNT_ID || !env.CF_AI_TOKEN) {
-    throw new Error("CF_ACCOUNT_ID / CF_AI_TOKEN not set");
-  }
-  const res = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/ai/run/${MODEL}`,
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${env.CF_AI_TOKEN}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ text: [text] }),
-    },
-  );
+  const res = await aiRest(MODEL, { text: [text] });
   const data = (await res.json()) as WorkersAiEmbeddingResponse;
   const vector = data.result?.data[0];
   if (!res.ok || !data.success || !vector) {
@@ -117,7 +83,7 @@ export async function embedCard(cardId: string): Promise<void> {
     return;
   }
 
-  if (!embeddingsConfigured()) return; // will be picked up by the sweep later
+  if (!workersAiConfigured()) return; // will be picked up by the sweep later
 
   const vec = await embedText(input);
   await db
@@ -136,7 +102,7 @@ export async function embedCard(cardId: string): Promise<void> {
  * key was absent.
  */
 export async function sweepStaleEmbeddings(limit = 100): Promise<number> {
-  if (!embeddingsConfigured()) return 0;
+  if (!workersAiConfigured()) return 0;
   const stale = await db
     .select({ id: cards.id })
     .from(cards)
