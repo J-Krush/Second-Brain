@@ -24,6 +24,7 @@ Fill in `.env.local`:
 | `APP_PASSWORD_HASH` | Output of `pnpm hash-password "your password"`. Format is `pbkdf2-sha256:<iter>:<salt>:<hash>` — colons on purpose, so nothing needs escaping in dotenv |
 | `SESSION_SECRET` | `openssl rand -hex 32` |
 | `API_TOKEN` | Any long random string; used by non-browser capture clients (`Authorization: Bearer …`) |
+| `CAPTURE_TOKEN` | Optional. Create-only bearer the iOS Shortcut uses ([`ingestion.md`](ingestion.md)); empty disables it |
 | `CRON_SECRET` | Any long random string; lets you call `/api/admin/*` by hand |
 | `R2_*` | Leave the MinIO defaults from the example (`minioadmin`/`minioadmin`, bucket `secondbrain-dev`, endpoint `http://localhost:9000`). `docker compose` creates the bucket |
 | `CF_ACCOUNT_ID`, `CF_AI_TOKEN` | Optional. Set them to get real embeddings in dev via the Workers AI REST API; create the token in the Cloudflare dashboard under Workers AI → *Use REST API* |

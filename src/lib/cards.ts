@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cardTags, cards, edges, fileRefs, files, placements, tags } from "@/db/schema";
 import { syncInlineRefs } from "./filerefs";
+import { canonicalUrl } from "./link-url";
 import { sourceFacetLabel, sourceOf, type SourceFilter } from "./source";
 
 // Columns safe to ship to the client: excludes the 1024-float `embedding` and
@@ -56,18 +57,34 @@ export interface CreateCardInput {
 
 export async function createCard(input: CreateCardInput): Promise<CardView> {
   const type = input.type && CARD_TYPES[input.type] ? input.type : "thought";
+  const url = input.url ? canonicalUrl(input.url) : null;
   const [row] = await db
     .insert(cards)
     .values({
       type,
       title: input.title ?? null,
       body: input.body ?? null,
-      url: input.url ?? null,
-      props: withSource(input.props ?? {}, input.url ?? null),
+      url,
+      props: withSource(input.props ?? {}, url),
     })
     .returning(cardCols);
   if (row!.body) await syncInlineRefs(row!.id, row!.body);
   return row!;
+}
+
+/**
+ * The live card already saved for `url` (compared in canonical form), if any.
+ * Lets the share sheet treat a repeat share as "already have it" instead of
+ * stacking duplicates in the inbox.
+ */
+export async function findCardByUrl(url: string): Promise<CardView | null> {
+  const [row] = await db
+    .select(cardCols)
+    .from(cards)
+    .where(and(eq(cards.url, canonicalUrl(url)), isNull(cards.deletedAt)))
+    .orderBy(desc(cards.createdAt))
+    .limit(1);
+  return row ?? null;
 }
 
 // Every card records provenance; callers that know better (share, upload,
@@ -343,7 +360,7 @@ export async function updateCard(
   if (input.type !== undefined && CARD_TYPES[input.type]) patch.type = input.type;
   if (input.title !== undefined) patch.title = input.title;
   if (input.body !== undefined) patch.body = input.body;
-  if (input.url !== undefined) patch.url = input.url;
+  if (input.url !== undefined) patch.url = input.url ? canonicalUrl(input.url) : input.url;
   if (input.props !== undefined) patch.props = input.props;
   if (input.triaged !== undefined) patch.triagedAt = input.triaged ? new Date() : null;
 

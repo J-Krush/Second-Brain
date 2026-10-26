@@ -159,7 +159,7 @@ export function useToast() {
     <div
       key={message}
       role="status"
-      className="sb-toast fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-line-2 bg-surface-2 px-4 py-2 font-mono text-[12px] text-ink shadow-[0_12px_40px_-12px_rgba(0,0,0,0.9)]"
+      className="sb-toast fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 z-50 -translate-x-1/2 rounded-full border border-line-2 bg-surface-2 px-4 py-2 font-mono text-[12px] text-ink shadow-[0_12px_40px_-12px_rgba(0,0,0,0.9)]"
     >
       <span className="mr-2 text-accent">&gt;</span>
       {message}
