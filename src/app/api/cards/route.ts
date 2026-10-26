@@ -18,7 +18,7 @@ const createSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  if (!(await authorize(request))) return unauthorized();
+  if (!(await authorize(request, "capture"))) return unauthorized();
   let payload: unknown;
   try {
     payload = await request.json();

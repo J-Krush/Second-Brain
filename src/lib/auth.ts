@@ -29,12 +29,17 @@ export async function checkLoginRate(ip: string): Promise<boolean> {
   return count <= RATE_MAX_ATTEMPTS;
 }
 
-export function bearerTokenValid(header: string | null): boolean {
+/**
+ * Checks a `Bearer` header. `API_TOKEN` and `CRON_SECRET` are full-access;
+ * `CAPTURE_TOKEN` (the one that lives in a phone Shortcut) only passes when
+ * the route opts in with `allowCapture`, so a leaked phone token can add
+ * cards but never read, edit, or export them.
+ */
+export function bearerTokenValid(header: string | null, allowCapture: boolean): boolean {
   if (!header) return false;
   const prefix = "Bearer ";
   if (!header.startsWith(prefix)) return false;
   const presented = header.slice(prefix.length);
-  // Accept the capture-client token or the cron-trigger secret.
-  const accepted = [env.API_TOKEN, env.CRON_SECRET].filter(Boolean);
-  return accepted.includes(presented);
+  const accepted = [env.API_TOKEN, env.CRON_SECRET, allowCapture ? env.CAPTURE_TOKEN : undefined];
+  return accepted.some((token) => token !== undefined && token === presented);
 }

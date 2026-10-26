@@ -20,6 +20,10 @@ export const env = {
   get API_TOKEN() {
     return process.env.API_TOKEN || undefined;
   },
+  // Create-only bearer for the iOS Shortcut; see `authorize(request, "capture")`.
+  get CAPTURE_TOKEN() {
+    return process.env.CAPTURE_TOKEN || undefined;
+  },
   get R2_ACCOUNT_ID() {
     return required("R2_ACCOUNT_ID");
   },
