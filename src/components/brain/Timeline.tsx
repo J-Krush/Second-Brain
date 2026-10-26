@@ -184,7 +184,7 @@ function EntryBody({ card }: { card: BrainCard }) {
           <SiteMark label={domain} className="size-4 text-[9px]" />
           {domain} <span className="text-cyan">↗</span>
         </a>
-        <h3 className="mt-1.5 font-display text-xl font-bold leading-snug tracking-tight text-ink transition-colors group-hover/link:text-accent">
+        <h3 className="mt-1.5 font-display text-xl font-bold leading-snug tracking-tight text-ink wrap-break-word transition-colors group-hover/link:text-accent">
           {card.title ?? card.url}
         </h3>
         {body && (

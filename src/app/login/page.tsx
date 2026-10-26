@@ -29,7 +29,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6">
+    <main className="flex min-h-screen items-center justify-center px-6 pt-[env(safe-area-inset-top)]">
       <form
         onSubmit={submit}
         className="w-full max-w-sm rounded-xl border border-line bg-surface p-8 shadow-2xl"

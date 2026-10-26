@@ -28,12 +28,22 @@ export const metadata: Metadata = {
   title: "Second Brain",
   description: "A personal, self-owned knowledge base.",
   manifest: "/manifest.webmanifest",
+  // iOS ignores most of the manifest: it needs these to install standalone
+  // with an icon and a status bar the page draws under (hence viewportFit
+  // cover + safe-area padding in the (app) layout). The icon must be opaque;
+  // iOS paints transparent pixels black.
+  appleWebApp: { capable: true, title: "Brain", statusBarStyle: "black-translucent" },
+  // Next renders `capable` as the generic `mobile-web-app-capable`; older iOS
+  // only reads the apple- prefixed name.
+  other: { "apple-mobile-web-app-capable": "yes" },
+  icons: { apple: "/apple-icon.png" },
 };
 
 export const viewport: Viewport = {
   themeColor: "#0a0c0e",
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
