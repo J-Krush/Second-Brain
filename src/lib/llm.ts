@@ -1,11 +1,12 @@
-import { env } from "./env";
+import type { AskSettings } from "./ask-config";
+import { workersAi } from "./llm-workers-ai";
 
 /**
  * The seam between /ask and whatever model answers it. A provider turns a
  * chat request into a stream of text deltas and nothing more: retrieval,
  * prompt construction and citation parsing live in ask.ts, so changing the
- * model is a one-entry change in PROVIDERS. Selected by LLM_PROVIDER; unset
- * means /ask runs in retrieval-only mode and says so.
+ * model is a one-entry change in PROVIDERS. Which provider and model run is
+ * chosen on /settings (`AskSettings.provider` / `.model`).
  */
 export interface LlmMessage {
   role: "system" | "user" | "assistant";
@@ -15,29 +16,28 @@ export interface LlmMessage {
 export interface LlmRequest {
   messages: LlmMessage[];
   maxTokens: number;
+  temperature: number;
   signal?: AbortSignal;
 }
 
 export interface LlmProvider {
   /** Stable id used in logs and the UI badge, e.g. "workers-ai". */
   id: string;
-  /** Model identifier as the vendor names it, e.g. "@cf/meta/llama-3.3-70b-instruct". */
+  /** Model identifier as the vendor names it, e.g. "@cf/openai/gpt-oss-120b". */
   model: string;
   /** Yields text deltas in order; throw to abort the answer. */
   generate(req: LlmRequest): AsyncIterable<string>;
 }
 
-// Keyed by the LLM_PROVIDER value. Each factory reads its own credentials
-// from env lazily so an unconfigured provider costs nothing until selected.
-const PROVIDERS: Record<string, () => LlmProvider> = {};
+type ProviderId = Exclude<AskSettings["provider"], "none">;
 
-export function llmProvider(): LlmProvider | null {
-  const id = env.LLM_PROVIDER;
-  if (!id) return null;
-  const make = PROVIDERS[id];
-  if (!make) {
-    const known = Object.keys(PROVIDERS).join(", ") || "none";
-    throw new Error(`Unknown LLM_PROVIDER "${id}" (known: ${known})`);
-  }
-  return make();
+// Each factory reads its own credentials lazily so an unselected provider
+// costs nothing.
+const PROVIDERS: Record<ProviderId, (model: string) => LlmProvider> = {
+  "workers-ai": workersAi,
+};
+
+export function llmProvider(settings: AskSettings): LlmProvider | null {
+  if (settings.provider === "none") return null;
+  return PROVIDERS[settings.provider](settings.model);
 }
