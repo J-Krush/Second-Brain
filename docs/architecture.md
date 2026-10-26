@@ -34,7 +34,7 @@ Everything is a row in `cards` with a `type` (`thought`, `quote`, `link`, `video
 ## Capture path
 
 1. `POST /api/cards` (browser composer or bearer client) or `POST /api/share` (Android share target, iOS Shortcut) validates, canonicalises the URL (`src/lib/link-url.ts`), inserts the card, stamps `props.source` (`typed` / `web:<domain>` / `share` / `upload` / `book`), and syncs `file_refs` from `![](file:UUID)` embeds in the body. `/api/share` returns an existing card with the same canonical URL instead of inserting.
-2. `after()`: if it is a link, `captureLink` gets a preview — YouTube's oEmbed for YouTube, nothing for Instagram (login wall), OpenGraph from the page otherwise — downloads the image into R2 as a file with an `og_cache` ref, and writes metadata into `props`. Then `embedCard` hashes `title + body`, skips if unchanged, otherwise embeds and stores the vector.
+2. `after()`: if it is a link, `captureLink` gets a preview — YouTube's oEmbed for YouTube, nothing for Instagram (login wall), OpenGraph from the page otherwise — downloads the image into R2 as a file with an `og_cache` ref, and writes metadata into `props`. The title is filled when empty or still equal to the previous auto-filled one. Then `embedCard` hashes `title + body` (+ `note` when set), skips if unchanged, otherwise embeds and stores the vector.
 3. The browser emits a `card-changed` window event (`src/lib/card-events.ts`); the stream, inbox count, and facet counts refetch.
 
 ## Files
@@ -46,7 +46,7 @@ Upload is client-driven and dedupes on content hash: the client computes sha256 
 `GET /api/search?q=&mode=quick|fts|semantic|hybrid` (`src/lib/search.ts`):
 
 - **quick** — `word_similarity` on `title` (pg_trgm), threshold 0.2; typo-tolerant as-you-type.
-- **fts** — `websearch_to_tsquery` against the generated `search` tsvector, `ts_rank`, title weighted A over body B.
+- **fts** — `websearch_to_tsquery` against the generated `search` tsvector, `ts_rank`, title weighted A over body and note B.
 - **semantic** — cosine distance over `embedding` using the HNSW index; 503 if no embedding provider is configured.
 - **hybrid** (default) — fts and semantic in parallel, merged with reciprocal rank fusion (`src/lib/rrf.ts`, k = 60). Returns `degraded: true` when it had to fall back to fts alone; the UI shows an amber note.
 
@@ -67,11 +67,12 @@ The one provider today is Workers AI (`src/lib/llm-workers-ai.ts`): `stream: tru
 
 | Area | Files | Notes |
 | --- | --- | --- |
-| Header | `src/app/(app)/layout.tsx`, `components/nav/ScopeNav.tsx`, `components/search/GlobalSearch.tsx`, `components/capture/AddButton.tsx` | Tabs `inbox · library · ask · settings`, the `⌘K` palette, the `+ Add ⌘J` button. The search and capture overlays are portaled to `document.body` because the header's `backdrop-blur` would clip fixed children |
-| Stream | `components/brain/BrainPage.tsx` | Owns URL state (`scope`, `view`, `type`, `source`, `tag`, `card`), fetches `/api/cards` and `/api/cards/facets`, renders `Shell` (filter row) + `Timeline` or `Desk` |
-| Filters | `components/brain/FacetMenu.tsx`, `Shell.tsx` | One control for kind/source/tag (multi) and for the composer's kind picker (single) |
-| Capture | `components/capture/CaptureDialog.tsx`, `components/brain/Composer.tsx`, `lib/capture-bus.ts` | `⌘J` toggles the dialog; `openCapture({ onCreated })` lets a board canvas receive the new card and place it |
-| Card | `components/card/CardModal.tsx` (+ `CardEditor`, `RelationEditor`, `BoardPicker`) | `?card=<id>` opens it; back button closes. Triage hotkeys `e` archive, `b` file to board, `t` tag |
+| Header | `src/app/(app)/layout.tsx`, `components/nav/ScopeNav.tsx`, `components/search/GlobalSearch.tsx`, `components/capture/AddButton.tsx` | Tabs `inbox · library · ask · tags · settings`, the `⌘K` palette, the `+ Add ⌘J` button. The search and capture overlays are portaled to `document.body` because the header's `backdrop-blur` would clip fixed children |
+| Stream | `components/brain/BrainPage.tsx` | Owns URL state (`scope`, `view`, `type`, `tag`, `card`), fetches `/api/cards` and `/api/cards/facets`, renders `Shell` (filter row) + `Timeline` or `Desk` |
+| Filters | `components/brain/FacetMenu.tsx`, `Shell.tsx` | One control for kind/tag (multi) and for the composer's kind picker (single) |
+| Capture | `components/capture/CaptureDialog.tsx`, `components/brain/Composer.tsx`, `lib/capture-bus.ts` | `⌘J` toggles the dialog; `openCapture({ onCreated })` lets a board canvas receive the new card and place it. Tags picked here are sent as `tagIds` and file the card to the library |
+| Tags | `components/TagPicker.tsx`, `components/TagManager.tsx`, `app/(app)/tags/page.tsx` | `TagPicker` attaches/creates in the card modal and composer; `/tags` renames (merging on name clash) and deletes |
+| Card | `components/card/CardModal.tsx` (+ `CardEditor`, `RelationEditor`, `BoardPicker`) | `?card=<id>` opens it; back button closes. Hotkeys `a` archive, `e` edit, `b` file to board, `t` tag, `l` connect a card (the "Connected cards" section; edges, not URLs) |
 | Ask | `components/ask/AskPage.tsx` | Client-side thread of exchanges; reads the NDJSON stream, renders the answer as markdown with `[n]` rewritten to `<a data-cite>` pills, and mounts `CardModal` so citations and source rows open cards in place (`?card=`) without losing the thread. `stop` aborts the fetch and keeps the partial answer |
 | Settings | `app/(app)/settings/page.tsx`, `components/AdminActions.tsx`, `components/settings/AskSettings.tsx` | Maintenance buttons, then the `/ask` knobs: each change PUTs a one-key patch (debounced 500 ms) to `/api/settings/ask`; the cost strip is `estimateCost()` over the draft, so it reprices before the save lands |
 | Boards | `components/board/BoardCanvas.tsx`, `CardShape.tsx` | tldraw with a custom shape per placed card. Placements are authoritative; native tldraw shapes (arrows, scribbles) persist as a filtered snapshot in the board card's `props` |

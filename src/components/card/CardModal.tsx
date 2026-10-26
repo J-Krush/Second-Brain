@@ -4,24 +4,19 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { CardEditor } from "@/components/CardEditor";
-import { TagEditor } from "@/components/TagEditor";
 import { fmtBytes } from "@/components/brain/item";
 import { Kbd, PdfStack, Waveform, fileUrl, heroOf, isTyping, useToast } from "@/components/brain/parts";
+import { TagPicker } from "@/components/TagPicker";
 import { styleFor } from "@/components/card-style";
 import { emitCardChanged, onCardChanged } from "@/lib/card-events";
 import { cardParam, closeCard } from "@/lib/card-url";
-import type { CardDetail } from "@/lib/cards";
+import type { CardDetail, CardTag } from "@/lib/cards";
 import { relativeTime } from "@/lib/format";
 import { renderMarkdown } from "@/lib/markdown";
 import { sourceOf } from "@/lib/source";
 import { BoardPicker } from "./BoardPicker";
+import { NoteEditor } from "./NoteEditor";
 import { RelationEditor } from "./RelationEditor";
-
-interface TagRef {
-  id: number;
-  name: string;
-  color: string | null;
-}
 
 type Card = CardDetail["card"];
 
@@ -149,11 +144,12 @@ function Hero({ detail }: { detail: CardDetail }) {
 function CardModalPanel({ id }: { id: string }) {
   const [detail, setDetail] = useState<CardDetail | null>(null);
   const [missing, setMissing] = useState(false);
-  const [allTags, setAllTags] = useState<TagRef[]>([]);
   const [editing, setEditing] = useState(false);
   const [picking, setPicking] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
+  const connectRef = useRef<HTMLButtonElement>(null);
+  const noteRef = useRef<HTMLButtonElement>(null);
   const { show: showToast, node: toastNode } = useToast();
 
   const load = useCallback(async () => {
@@ -172,14 +168,18 @@ function CardModalPanel({ id }: { id: string }) {
     });
   }, [id, load]);
 
-  useEffect(() => {
-    const ctrl = new AbortController();
-    fetch("/api/tags", { signal: ctrl.signal })
-      .then((r) => (r.ok ? r.json() : { tags: [] }))
-      .then((d: { tags: TagRef[] }) => setAllTags(d.tags))
-      .catch(() => {});
-    return () => ctrl.abort();
-  }, []);
+  // Optimistic; the reload after `emitCardChanged` reconciles (and reverts a failed write).
+  async function setTag(tag: CardTag, action: "attach" | "detach") {
+    setDetail((d) =>
+      d && { ...d, tags: action === "attach" ? [...d.tags, tag] : d.tags.filter((t) => t.id !== tag.id) },
+    );
+    await fetch(`/api/cards/${id}/tags`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tagId: tag.id, action }),
+    }).catch(() => null);
+    emitCardChanged(id);
+  }
 
   // Lock page scroll behind the modal and move focus into it.
   useEffect(() => {
@@ -216,6 +216,17 @@ function CardModalPanel({ id }: { id: string }) {
     tagInputRef.current?.focus();
   }, []);
 
+  const connect = useCallback(() => {
+    const button = connectRef.current;
+    button?.scrollIntoView({ block: "center", behavior: "smooth" });
+    button?.click();
+  }, []);
+
+  const editNote = useCallback(() => {
+    noteRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    noteRef.current?.click();
+  }, []);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -226,20 +237,29 @@ function CardModalPanel({ id }: { id: string }) {
         return;
       }
       if (editing || isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey || !detail) return;
-      if (e.key === "e" && untriaged) {
+      if (e.key === "a" && untriaged) {
         e.preventDefault();
         void archive();
+      } else if (e.key === "e") {
+        e.preventDefault();
+        setEditing(true);
       } else if (e.key === "b") {
         e.preventDefault();
         setPicking(true);
       } else if (e.key === "t") {
         e.preventDefault();
         focusTags();
+      } else if (e.key === "l") {
+        e.preventDefault();
+        connect();
+      } else if (e.key === "n") {
+        e.preventDefault();
+        editNote();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [archive, detail, editing, focusTags, picking, untriaged]);
+  }, [archive, connect, detail, editNote, editing, focusTags, picking, untriaged]);
 
   const card = detail?.card;
   const style = styleFor(card?.type ?? "thought");
@@ -312,19 +332,32 @@ function CardModalPanel({ id }: { id: string }) {
 
             {html && <div className="prose-sb mt-4" dangerouslySetInnerHTML={{ __html: html }} />}
 
-            {untriaged && (
-              <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-dashed border-line-2 px-3 py-2.5 font-mono text-[11px] text-ink-faint">
+            <div className="mt-5">
+              <NoteEditor cardId={card.id} note={card.note} openRef={noteRef} />
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-dashed border-line-2 px-3 py-2.5 font-mono text-[11px] text-ink-faint">
+              {untriaged && (
                 <button type="button" onClick={() => void archive()} className="flex items-center gap-1.5 hover:text-ink">
-                  <Kbd>e</Kbd> archive
+                  <Kbd>a</Kbd> archive
                 </button>
-                <button type="button" onClick={() => setPicking(true)} className="flex items-center gap-1.5 hover:text-ink">
-                  <Kbd>b</Kbd> file to board
-                </button>
-                <button type="button" onClick={focusTags} className="flex items-center gap-1.5 hover:text-ink">
-                  <Kbd>t</Kbd> tag
-                </button>
-              </div>
-            )}
+              )}
+              <button type="button" onClick={() => setEditing(true)} className="flex items-center gap-1.5 hover:text-ink">
+                <Kbd>e</Kbd> edit
+              </button>
+              <button type="button" onClick={editNote} className="flex items-center gap-1.5 hover:text-ink">
+                <Kbd>n</Kbd> note
+              </button>
+              <button type="button" onClick={() => setPicking(true)} className="flex items-center gap-1.5 hover:text-ink">
+                <Kbd>b</Kbd> file to board
+              </button>
+              <button type="button" onClick={focusTags} className="flex items-center gap-1.5 hover:text-ink">
+                <Kbd>t</Kbd> tag
+              </button>
+              <button type="button" onClick={connect} className="flex items-center gap-1.5 hover:text-ink">
+                <Kbd>l</Kbd> connect card
+              </button>
+            </div>
 
             <Section label="Source">
               <dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 font-mono text-[12px]">
@@ -414,11 +447,16 @@ function CardModalPanel({ id }: { id: string }) {
                   />
                 </div>
               )}
-              <TagEditor key={card.id} cardId={card.id} attached={detail.tags} allTags={allTags} inputRef={tagInputRef} />
+              <TagPicker
+                value={detail.tags}
+                onAdd={(tag) => void setTag(tag, "attach")}
+                onRemove={(tag) => void setTag(tag, "detach")}
+                inputRef={tagInputRef}
+              />
             </Section>
 
-            <Section label="Links">
-              <RelationEditor cardId={card.id} links={detail.links} backlinks={detail.backlinks} />
+            <Section label="Connected cards">
+              <RelationEditor cardId={card.id} links={detail.links} backlinks={detail.backlinks} addRef={connectRef} />
             </Section>
           </article>
         )}

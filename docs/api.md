@@ -32,12 +32,12 @@ curl -X POST https://<your-worker>/api/cards \
 
 | Method | Path | Body / query | Notes |
 | --- | --- | --- | --- |
-| `POST` | `/api/cards` | `{ type?, title?, body?, url?, props? }` | Accepts `CAPTURE_TOKEN`. `type` defaults to `thought`; unknown types are rejected. To capture a link send `type: "link"` and `url` (the browser composer derives these from a leading URL; the API does not). `url` is canonicalised (tracking params and fragment dropped, YouTube forms unified; same on `PATCH`). Server stamps `props.source`, syncs inline file refs, then `after()` runs OG capture (links) and embedding. `201 { card }` |
-| `GET` | `/api/cards` | `?view=inbox\|library&type=a,b&source=k1,k2&tag=1,2&order=asc\|desc&cursor=` | Keyset pagination on `(created_at, id)`; `nextCursor` is `"<iso>\|<uuid>"`. Filters are comma lists, OR within a key, AND across. Source keys: `typed`, `share`, `upload`, `book`, `web:<domain>` |
+| `POST` | `/api/cards` | `{ type?, title?, body?, note?, url?, props?, tagIds? }` | Accepts `CAPTURE_TOKEN`. `type` defaults to `thought`; unknown types are rejected. `note` is the user's take, separate from the content in `body` (D25). To capture a link send `type: "link"` and `url` (the browser composer derives these from a leading URL and puts the text after it in `note`; the API does not). `url` is canonicalised (tracking params and fragment dropped, YouTube forms unified; same on `PATCH`). `tagIds` (≤ 64) attaches existing tags (unknown ids are skipped) and files the card straight to the library (`triaged_at` set), same as tagging later. Server stamps `props.source`, syncs inline file refs, then `after()` runs OG capture (links) and embedding. `201 { card }` |
+| `GET` | `/api/cards` | `?view=inbox\|library&type=a,b&source=k1,k2&tag=1,2&order=asc\|desc&cursor=` | Keyset pagination on `(created_at, id)`; `nextCursor` is `"<iso>\|<uuid>"`. Filters are comma lists, OR within a key, AND across. Source keys: `typed`, `share`, `upload`, `book`, `web:<domain>` (API only; the web UI has no source filter) |
 | `GET` | `/api/cards/count` | — | `{ inbox }` exact untriaged count |
-| `GET` | `/api/cards/facets` | `?view=inbox\|library` | `{ kinds: [{type,count}], sources: [{key,label,via,domain,count}] }` scoped to the view only |
+| `GET` | `/api/cards/facets` | `?view=inbox\|library` | `{ kinds: [{type,count}], tags: [{id,name,color,count}] }` scoped to the view only. `tags` lists every tag, including ones with no cards in the view (`count: 0`) |
 | `GET` | `/api/cards/:id` | — | `{ card, tags, files, boards, links, backlinks }` — boards it appears on, outgoing edges, incoming edges |
-| `PATCH` | `/api/cards/:id` | `{ type?, title?, body?, url?, props?, triaged? }` | Partial. `triaged: true/false` sets/clears `triaged_at`. Re-syncs refs; re-embeds when `title`/`body` are present; re-captures OG for links when `url` or `type` are present |
+| `PATCH` | `/api/cards/:id` | `{ type?, title?, body?, note?, url?, props?, triaged? }` | Partial. `triaged: true/false` sets/clears `triaged_at`. Re-syncs refs; re-embeds when `title`/`body`/`note` are present; re-captures OG for links when `url` or `type` are present |
 | `DELETE` | `/api/cards/:id` | — | Soft delete (`deleted_at`); GC hard-deletes after 30 days |
 | `POST` | `/api/cards/:id/tags` | `{ tagId, action: "attach"\|"detach" }` | Attaching auto-triages |
 
@@ -66,7 +66,7 @@ curl -X POST https://<your-worker>/api/cards \
 | --- | --- | --- | --- |
 | `GET` | `/api/tags` | — | All tags with card counts |
 | `POST` | `/api/tags` | `{ name (1–64), color? }` | |
-| `PATCH` | `/api/tags/:id` | `{ name?, color? }` | Rename applies everywhere |
+| `PATCH` | `/api/tags/:id` | `{ name?, color? }` | `{ tag, merged }`. Rename applies everywhere. If another tag already has the name (case-insensitive), the two merge: cards move onto that tag, it takes the typed name, and `:id` is deleted (`merged: true`, `tag` is the survivor) |
 | `DELETE` | `/api/tags/:id` | — | Detaches from all cards |
 | `POST` | `/api/edges` | `{ fromCard, toCard, label?, description? }` | Upsert. Omitting `description` leaves an existing one untouched (board arrow sync relies on this) |
 | `DELETE` | `/api/edges` | `{ fromCard, toCard }` | |
@@ -96,7 +96,7 @@ Client helper: `src/lib/upload-client.ts` does hash → presign → PUT → conf
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `POST` | `/api/share` | Accepts `CAPTURE_TOKEN`. `multipart/form-data` with `title`, `text`, `url`, `files[]` (images) — the Android PWA share target (`public/manifest.webmanifest`) and the iOS Shortcut. The link is `url`, else the first `http(s)` URL in `text` (removed from the body). A link whose canonical URL already belongs to a live card returns that card instead of a duplicate, unless images are attached. Creates a card with `props.source.via = "share"`. With `Accept: application/json`: `201 { card, existing: false }` or `200 { card, existing: true }`; otherwise 303 to `/cards/:id` |
+| `POST` | `/api/share` | Accepts `CAPTURE_TOKEN`. `multipart/form-data` with `title`, `text`, `url`, `files[]` (images) — the Android PWA share target (`public/manifest.webmanifest`) and the iOS Shortcut. The link is `url`, else the first `http(s)` URL in `text` (removed from the text). With a link, the remaining text becomes the card's `note`; without one, it is the body. A link whose canonical URL already belongs to a live card returns that card instead of a duplicate, unless images are attached. Creates a card with `props.source.via = "share"`. With `Accept: application/json`: `201 { card, existing: false }` or `200 { card, existing: true }`; otherwise 303 to `/cards/:id` |
 | `GET` | `/api/export` | Streams a zip: every card as markdown with YAML front-matter (id, type, title, tags, …) plus every referenced file |
 
 ## Maintenance

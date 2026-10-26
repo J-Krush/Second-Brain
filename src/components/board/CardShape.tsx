@@ -17,6 +17,8 @@ function CardShapeBody({ shape }: { shape: CardShape }) {
   const card = cards[shape.props.cardId];
   const style = styleFor(card?.type ?? "thought");
   const isQuote = card?.type === "quote" || card?.type === "mantra";
+  // Links usually have no body; their note is the only text worth showing on the canvas.
+  const text = card?.body || card?.note;
   const og = ((card?.props as Record<string, unknown> | undefined)?.og ?? undefined) as
     | { image?: string }
     | undefined;
@@ -60,7 +62,7 @@ function CardShapeBody({ shape }: { shape: CardShape }) {
         {card?.title && (
           <div style={{ fontWeight: 600, fontSize: 14 }}>{card.title}</div>
         )}
-        {card?.body && (
+        {text && (
           <div
             style={{
               fontSize: 12,
@@ -72,7 +74,7 @@ function CardShapeBody({ shape }: { shape: CardShape }) {
               overflow: "hidden",
             }}
           >
-            {card.body}
+            {text}
           </div>
         )}
         {!card && <div style={{ fontSize: 12, color: "#9a958a" }}>Missing card</div>}

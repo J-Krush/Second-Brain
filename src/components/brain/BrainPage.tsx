@@ -8,11 +8,10 @@ import { CARD_STYLE } from "@/components/card-style";
 import { onCardChanged } from "@/lib/card-events";
 import { csv, joinCsv, replaceParams } from "@/lib/card-url";
 import type { Facets } from "@/lib/cards";
-import { parseSourceKey } from "@/lib/source";
 import { Desk } from "./Desk";
 import type { BrainCard, Scope, View } from "./item";
 import { Kbd, useToast } from "./parts";
-import { Shell, type TagOption } from "./Shell";
+import { Shell } from "./Shell";
 import { Timeline } from "./Timeline";
 
 interface Page {
@@ -25,15 +24,12 @@ interface Page {
  * the inbox (untriaged) or the whole library. All view state is in the URL;
  * `?card=<id>` is handled by the modal.
  */
-export function BrainPage({ tags }: { tags: TagOption[] }) {
+export function BrainPage() {
   const params = useSearchParams();
   const scope: Scope = params.get("scope") === "library" ? "library" : "inbox";
   const view: View = params.get("view") === "desk" ? "desk" : "timeline";
   const types = csv(params.get("type")).filter((t) => Object.hasOwn(CARD_STYLE, t));
-  const sources = csv(params.get("source")).filter((k) => parseSourceKey(k) !== null);
-  const tagIds = csv(params.get("tag"))
-    .map(Number)
-    .filter((id) => tags.some((t) => t.id === id));
+  const tagIds = csv(params.get("tag")).map(Number).filter(Number.isInteger);
 
   const toast = useToast();
   const [page, setPage] = useState<Page | null>(null);
@@ -47,7 +43,6 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
 
   const query = new URLSearchParams({ view: scope });
   if (types.length) query.set("type", types.join(","));
-  if (sources.length) query.set("source", sources.join(","));
   if (tagIds.length) query.set("tag", tagIds.join(","));
   const queryKey = query.toString();
 
@@ -107,14 +102,14 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
     }
   }
 
-  const filtered = types.length + sources.length + tagIds.length > 0;
+  const filtered = types.length + tagIds.length > 0;
   const items = page?.items ?? [];
 
   return (
     <div style={{ "--sb-bar": `${barHeight}px` } as React.CSSProperties}>
       <div ref={bar} className="sticky top-14 z-20 bg-base/85 backdrop-blur">
         <div className="mx-auto max-w-[96rem] px-6 lg:px-10">
-          <Shell view={view} types={types} sources={sources} tagIds={tagIds} facets={facets} tags={tags} />
+          <Shell view={view} types={types} tagIds={tagIds} facets={facets} />
         </div>
       </div>
 
@@ -130,7 +125,7 @@ export function BrainPage({ tags }: { tags: TagOption[] }) {
               hint={
                 <button
                   type="button"
-                  onClick={() => replaceParams({ type: null, source: null, tag: null })}
+                  onClick={() => replaceParams({ type: null, tag: null })}
                   className="text-accent hover:underline"
                 >
                   clear filters
