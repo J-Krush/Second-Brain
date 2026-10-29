@@ -42,5 +42,6 @@ The `⌘K` / `/` palette. It calls `GET /api/search?mode=hybrid`. Without an emb
 ## Adversarial
 
 - `Esc` closes the palette; `/` typed inside a text field does not open it.
-- Typing quickly: results belong to the final query, never to an earlier one (requests are aborted).
+- Typing quickly: results belong to the final query, never to an earlier one (requests are aborted). This holds when the final request fails too: a long pasted query (2000 CJK characters, 431 from the server) must not leave the previous query's results listed and selectable with `↵` (finding F4: `GlobalSearch` returns early on a non-ok response and keeps the old hits).
 - Empty query shows no error.
+- Every word must match (`docs/api.md`: the default `match=all` requires every term; only the last word may be a prefix while typing). `<marker> zqxbanana` lists nothing, and `<marker> -thought` excludes `<marker> thought` (finding F3: hybrid fuses `searchQuick`, `word_similarity > 0.2` over the whole string, which ignores every-term matching and websearch operators: `neon docs` also lists "Water filter comparison notes").

@@ -44,10 +44,10 @@ Opening a card and moving it out of the inbox. URL is state: `?card=<id>` owns t
 1. In the inbox, click **archive** on a card's hover actions.
 
 **Expected:**
-- Same result as `e`, without opening the modal.
+- Same outcome as `e`, without opening the modal: inbox count drops by one, the card leaves the inbox stream and appears under **library**. The toast here reads `archived · <title>`.
 
 ## Adversarial
 
 - Hotkeys do nothing while typing in an input (pressing `e` in the tag field types an "e").
 - `Esc` inside the tag input closes only the input; a second `Esc` closes the modal.
-- Opening `?card=<nonexistent-uuid>` shows a not-found state, not a crash.
+- Opening `?card=<nonexistent-uuid>` or `?card=not-a-uuid` shows a `card not found` state, not a crash.

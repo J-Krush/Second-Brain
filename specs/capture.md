@@ -37,7 +37,7 @@ Getting anything into the inbox from anywhere in the app. PROJECT.md: capture ne
 **Expected:**
 - The kind picker switches to **link** once a URL is detected.
 - The card appears immediately as a link card showing the `example.com` domain.
-- Within a few seconds the card shows the page title (`Example Domain`) **without a manual reload**. OpenGraph capture runs in `after()`, after the response.
+- Within a few seconds the card shows the page title (`Example Domain`) **without a manual reload**. OpenGraph capture runs in `after()`, after the response. (Tests use `https://example.com/?uat=<marker>` so the card is unambiguous.)
 
 ## 4. Capture from the + add button
 
@@ -46,6 +46,16 @@ Getting anything into the inbox from anywhere in the app. PROJECT.md: capture ne
 
 **Expected:**
 - The same Capture dialog opens as with the hotkey.
+
+## 5. Turn a card into a link in the editor
+
+**Steps:**
+1. Open an untitled thought card, click **edit**.
+2. Set the kind to **Link**, enter `https://example.com/?uat=<marker>`, click **Save**.
+
+**Expected:**
+- The modal and the stream card both show `Example Domain` within a few seconds, without a reload.
+- Persisted: `type: link`, `title: Example Domain`. A card that already has a title keeps it.
 
 ## Adversarial
 

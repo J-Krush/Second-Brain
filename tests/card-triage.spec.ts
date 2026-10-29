@@ -71,8 +71,44 @@ test("3. tag with t triages; e typed in the tag input does not archive", async (
   }
 });
 
-test("adversarial: unknown card id does not crash", async ({ page }) => {
-  await page.goto("/?card=00000000-0000-0000-0000-000000000000");
-  await expect(page.getByRole("navigation", { name: "scope" })).toBeVisible();
-  await expect(page.getByText(/application error|unhandled/i)).toHaveCount(0);
+test("4. archive from the stream", async ({ page, request, marker }) => {
+  const before = await inboxCount(request);
+  await page.goto("/");
+  const card = page.locator("article").filter({ hasText: `${marker} thought` });
+  await card.hover();
+  await card.getByRole("button", { name: "archive" }).click();
+
+  await expect(page.getByText(`archived · ${marker} thought`)).toBeVisible();
+  await expect(card).toHaveCount(0);
+  await expectInboxBadge(page, before - 1);
+  expect(await inboxCount(request)).toBe(before - 1);
+  await page.goto("/?scope=library");
+  await expect(page.getByText(`${marker} thought`)).toBeVisible();
+});
+
+test("adversarial: Esc in the tag input closes only the input, a second Esc closes the modal", async ({ page, request, marker }) => {
+  await page.goto(`/?card=${cardId}`);
+  const modal = page.getByRole("dialog", { name: `${marker} thought` });
+  await expect(modal).toBeVisible();
+  await page.keyboard.press("t");
+  const input = modal.getByRole("textbox", { name: "+ tag" });
+  await expect(input).toBeFocused();
+  await input.pressSequentially("ab");
+  await page.keyboard.press("Escape");
+  await expect(modal).toBeVisible();
+  await expect(page).toHaveURL(/card=/);
+  await page.keyboard.press("Escape");
+  await expect(modal).toBeHidden();
+  await expect(page).not.toHaveURL(/card=/);
+  const detail: { tags: unknown[] } = await (await request.get(`/api/cards/${cardId}`)).json();
+  expect(detail.tags).toHaveLength(0);
+});
+
+test("adversarial: unknown or malformed card id shows not found, no crash", async ({ page }) => {
+  for (const id of ["00000000-0000-0000-0000-000000000000", "not-a-uuid"]) {
+    await page.goto(`/?card=${id}`);
+    await expect(page.getByRole("navigation", { name: "scope" })).toBeVisible();
+    await expect(page.getByRole("dialog")).toContainText("card not found");
+    await expect(page.getByText(/application error|unhandled/i)).toHaveCount(0);
+  }
 });
