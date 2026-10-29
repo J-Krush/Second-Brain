@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CARD_STYLE } from "@/components/card-style";
-import { emitCardChanged } from "@/lib/card-events";
+import { emitCardChanged, emitWhenLinkPreviewed } from "@/lib/card-events";
 import type { CreatedCard } from "@/lib/capture-bus";
 import type { Source } from "@/lib/source";
 import { uploadFile } from "@/lib/upload-client";
@@ -104,6 +104,7 @@ export async function postCard(draft: Draft): Promise<CreatedCard> {
   if (res.status !== 201) throw new Error(`capture failed (${res.status})`);
   const { card } = (await res.json()) as { card: CreatedCard };
   emitCardChanged(card.id);
+  if (card.type === "link" && card.url) emitWhenLinkPreviewed(card);
   return card;
 }
 
