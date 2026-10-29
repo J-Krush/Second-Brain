@@ -15,6 +15,9 @@
     "deploy": "opennextjs-cloudflare build && XDG_CONFIG_HOME=.cf-auth opennextjs-cloudflare deploy",
     "cf": "XDG_CONFIG_HOME=.cf-auth wrangler"
   },
+  "engines": {
+    "node": ">=24.22.2"
+  },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.20.8",
     "@tldraw/tlschema": "5.3.1",
@@ -33,7 +36,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/node": "^26.2.0",
+    "@types/node": "^24.19.2",
     "@types/pg": "^8.21.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
