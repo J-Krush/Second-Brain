@@ -79,3 +79,47 @@ test("adversarial: results belong to the final query even when its request fails
   await input.fill("中".repeat(2000));
   await expect(palette).not.toContainText(`${marker} thought`);
 });
+
+test("adversarial: a last term with inner punctuation still matches as a whole term", async ({ page, request, marker, track }) => {
+  test.fail(true, "F5: tsquery() splits the trailing alphanumeric run off node.js/example.com/v1.2, so the whole token never matches");
+  const res = await request.post("/api/cards", {
+    data: { title: `${marker} stack`, body: "notes on node.js, example.com and v1.2" },
+  });
+  expect(res.status()).toBe(201);
+  track((await res.json()).card.id);
+
+  const titles = async (q: string) => {
+    const body: { hits: { title: string | null }[] } = await (
+      await request.get(`/api/search?mode=hybrid&q=${encodeURIComponent(q)}`)
+    ).json();
+    return body.hits.map((h) => h.title);
+  };
+  expect(await titles(`node.js ${marker}`)).toContain(`${marker} stack`);
+  for (const term of ["node.js", "example.com", "v1.2"]) {
+    expect(await titles(`${marker} ${term}`), term).toContain(`${marker} stack`);
+  }
+
+  const palette = page.getByRole("dialog", { name: "Search" });
+  await pressUntilVisible(page, "/", palette);
+  await page.getByRole("combobox", { name: "Search" }).fill(`${marker} node.js`);
+  await expect(palette).toContainText(`${marker} stack`);
+});
+
+test("4. prefix of an inflected word matches while typing", async ({ page, request, marker, track }) => {
+  test.fail(true, "F6: the typed prefix is stemmed and prefix-matched against stems; runn:* never reaches the lexeme run");
+  const res = await request.post("/api/cards", { data: { title: `${marker} running shoes` } });
+  expect(res.status()).toBe(201);
+  track((await res.json()).card.id);
+
+  const palette = page.getByRole("dialog", { name: "Search" });
+  const input = page.getByRole("combobox", { name: "Search" });
+  await pressUntilVisible(page, "/", palette);
+  for (const typed of ["run", "runn", "runnin", "running"]) {
+    const q = `${marker} ${typed}`;
+    // The palette keeps the previous results until this query's response lands; assert only after it does.
+    const landed = page.waitForResponse((r) => new URL(r.url()).searchParams.get("q") === q);
+    await input.fill(q);
+    await landed;
+    await expect(palette, typed).toContainText(`${marker} running shoes`, { timeout: 1_000 });
+  }
+});
