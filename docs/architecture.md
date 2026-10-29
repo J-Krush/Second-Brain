@@ -48,7 +48,7 @@ Upload is client-driven and dedupes on content hash: the client computes sha256 
 - **quick** — `word_similarity` on `title` (pg_trgm), threshold 0.2; typo-tolerant as-you-type.
 - **fts** — `websearch_to_tsquery` against the generated `search` tsvector, `ts_rank`, title weighted A over body B.
 - **semantic** — cosine distance over `embedding` using the HNSW index; 503 if no embedding provider is configured.
-- **hybrid** (default) — fts and semantic in parallel, merged with reciprocal rank fusion (`src/lib/rrf.ts`, k = 60). Returns `degraded: true` when it had to fall back to fts alone; the UI shows an amber note.
+- **hybrid** (default, used by the `/` palette) — fts, quick, and semantic in parallel, merged with reciprocal rank fusion (`src/lib/rrf.ts`, k = 60). Quick is in the mix so a word prefix typed into the palette matches (FTS only matches whole lexemes); it is left out for `match=any`, the /ask retrieval default. Returns `degraded: true` when semantic was unavailable; the UI shows an amber note.
 
 ## Ask
 

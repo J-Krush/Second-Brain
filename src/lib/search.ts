@@ -149,21 +149,23 @@ export interface HybridResult {
 }
 
 /**
- * Hybrid: run FTS and semantic in parallel, fuse with RRF. When embeddings
- * are not configured it degrades to FTS alone and flags `degraded`.
+ * Hybrid: FTS and semantic in parallel, fused with RRF. When embeddings are
+ * not configured semantic drops out and `degraded` is set. The search box
+ * (`match: "all"`) also fuses the quick matcher, because FTS matches whole
+ * lexemes and the palette searches as you type: `shar` must find "share sheet".
+ * `match: "any"` (the /ask default) skips it: long questions only add trigram noise.
  */
 export async function searchHybrid(
   q: string,
   filters: SearchFilters = {},
 ): Promise<HybridResult> {
-  if (!workersAiConfigured()) {
-    return { hits: await searchFts(q, filters), degraded: true };
-  }
-  const [fts, semantic] = await Promise.all([
+  const semantic = workersAiConfigured();
+  const lists = await Promise.all([
     searchFts(q, filters),
-    searchSemantic(q, filters),
+    ...(filters.match === "any" ? [] : [searchQuick(q, filters)]),
+    ...(semantic ? [searchSemantic(q, filters)] : []),
   ]);
-  const fused = reciprocalRankFusion([fts, semantic]);
+  const fused = lists.length === 1 ? lists[0]! : reciprocalRankFusion(lists);
   const limit = filters.limit ?? 50;
-  return { hits: fused.slice(0, limit), degraded: false };
+  return { hits: fused.slice(0, limit), degraded: !semantic };
 }
