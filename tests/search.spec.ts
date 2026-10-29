@@ -174,3 +174,34 @@ test("adversarial: a punctuation-joined term matches as a prefix while typing", 
   await landed;
   await expect(palette).toContainText(`${marker} stack`, { timeout: 1_000 });
 });
+
+test("adversarial: the typed last chunk is literal text at a word start", async ({ page, request, marker, track }) => {
+  const res = await request.post("/api/cards", {
+    data: { title: `${marker} running shoes`, body: "f(x) a[1] C++ back\\slash Zürich" },
+  });
+  expect(res.status()).toBe(201);
+  track((await res.json()).card.id);
+
+  const titles = async (q: string) => {
+    const body: { hits: { title: string | null }[] } = await (
+      await request.get(`/api/search?mode=hybrid&q=${encodeURIComponent(q)}`)
+    ).json();
+    return body.hits.map((h) => h.title);
+  };
+  for (const typed of ["f(", "f(x", "a[1", "C+", "back\\", "RUNN", "ZÜR"]) {
+    expect(await titles(`${marker} ${typed}`), typed).toContain(`${marker} running shoes`);
+  }
+  // Regex syntax is not a pattern (`r*`, `r.n`, `[rs]unn` would all reach "running"), and a fragment
+  // from inside a word is no prefix.
+  for (const typed of ["r*", "r.n", "s.o", "[rs]unn", "zz|running", "unning", "hoes", "ürich"]) {
+    expect(await titles(`${marker} ${typed}`), typed).not.toContain(`${marker} running shoes`);
+  }
+
+  const palette = page.getByRole("dialog", { name: "Search" });
+  await pressUntilVisible(page, "/", palette);
+  const q = `${marker} a[1`;
+  const landed = page.waitForResponse((r) => new URL(r.url()).searchParams.get("q") === q);
+  await page.getByRole("combobox", { name: "Search" }).fill(q);
+  await landed;
+  await expect(palette).toContainText(`${marker} running shoes`, { timeout: 1_000 });
+});
