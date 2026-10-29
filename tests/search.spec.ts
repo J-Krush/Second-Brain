@@ -53,7 +53,6 @@ test("adversarial: Esc closes, / inside a text field types, blank query shows no
 });
 
 test("adversarial: every word must match, a word absent from the card excludes it", async ({ page, request, marker }) => {
-  test.fail(true, "F3: hybrid fuses searchQuick (word_similarity > 0.2), which ignores match=all and websearch operators");
   const hits = async (q: string) => {
     const body: { hits: { title: string | null }[] } = await (
       await request.get(`/api/search?mode=hybrid&q=${encodeURIComponent(q)}`)
@@ -70,7 +69,6 @@ test("adversarial: every word must match, a word absent from the card excludes i
 });
 
 test("adversarial: results belong to the final query even when its request fails", async ({ page, marker }) => {
-  test.fail(true, "F4: GlobalSearch keeps the previous hits when the response is not ok (431 for a long pasted query)");
   const palette = page.getByRole("dialog", { name: "Search" });
   const input = page.getByRole("combobox", { name: "Search" });
   await pressUntilVisible(page, "/", palette);

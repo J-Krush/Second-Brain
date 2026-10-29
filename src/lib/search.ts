@@ -71,17 +71,26 @@ export async function searchQuick(
   return rows.rows as unknown as SearchHit[];
 }
 
+// A trailing plain word, the one still being typed. Not after `-` (negation), `or`, or inside an open quote.
+const TRAILING_WORD = /^(.*?)([\p{L}\p{N}]+)$/u;
+
 /**
  * The tsquery for a user string. `any` extracts lexemes with the same
  * normalisation as the indexed column (stopwords gone, stems applied) and
  * ORs them; each is quoted so URLs and apostrophes survive the re-parse.
+ * `all` is websearch syntax, except that a trailing plain word also matches
+ * as a prefix, so a search box finds "share sheet" from `shar` while every
+ * other term must still match.
  */
 function tsquery(q: string, match: SearchFilters["match"]) {
   if (match === "any") {
     return sql`(SELECT to_tsquery('english', coalesce(string_agg(quote_literal(lexeme), ' | '), ''))
                 FROM unnest(to_tsvector('english', ${q})))`;
   }
-  return sql`websearch_to_tsquery('english', ${q})`;
+  const m = TRAILING_WORD.exec(q.trim());
+  const openQuote = (q.match(/"/g)?.length ?? 0) % 2 === 1;
+  if (!m || openQuote || /(^|\s)(-|or\s+)$/i.test(m[1]!)) return sql`websearch_to_tsquery('english', ${q})`;
+  return sql`(websearch_to_tsquery('english', ${m[1]!}) && to_tsquery('english', quote_literal(${m[2]!}) || ':*'))`;
 }
 
 /**
@@ -150,10 +159,7 @@ export interface HybridResult {
 
 /**
  * Hybrid: FTS and semantic in parallel, fused with RRF. When embeddings are
- * not configured semantic drops out and `degraded` is set. The search box
- * (`match: "all"`) also fuses the quick matcher, because FTS matches whole
- * lexemes and the palette searches as you type: `shar` must find "share sheet".
- * `match: "any"` (the /ask default) skips it: long questions only add trigram noise.
+ * not configured semantic drops out and `degraded` is set.
  */
 export async function searchHybrid(
   q: string,
@@ -162,7 +168,6 @@ export async function searchHybrid(
   const semantic = workersAiConfigured();
   const lists = await Promise.all([
     searchFts(q, filters),
-    ...(filters.match === "any" ? [] : [searchQuick(q, filters)]),
     ...(semantic ? [searchSemantic(q, filters)] : []),
   ]);
   const fused = lists.length === 1 ? lists[0]! : reciprocalRankFusion(lists);

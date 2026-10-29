@@ -92,7 +92,10 @@ export function GlobalSearch() {
         const res = await fetch(`/api/search?mode=hybrid&q=${encodeURIComponent(query)}`, {
           signal: ctrl.signal,
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          setHits([]);
+          return;
+        }
         const data = (await res.json()) as SearchResponse;
         setHits(data.hits);
         setDegraded(Boolean(data.degraded));
