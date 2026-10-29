@@ -8,6 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json",
     "test": "vitest run",
+    "e2e": "playwright test",
     "db:migrate": "tsx scripts/migrate.ts",
     "hash-password": "tsx scripts/hash-password.ts",
     "cf:types": "XDG_CONFIG_HOME=.cf-auth wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
@@ -35,6 +36,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24.19.2",
     "@types/pg": "^8.21.0",

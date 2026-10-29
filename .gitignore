@@ -15,3 +15,7 @@ next-env.d.ts
 .neon-auth/
 # Local copy of generated production secrets (source of truth: GitHub secrets)
 .prod.vars
+# Playwright: saved login, traces/videos, HTML report
+tests/.auth/
+tests/.results/
+tests/.report/
