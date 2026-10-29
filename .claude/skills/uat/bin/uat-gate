@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# UAT gate: per-commit receipts that a branch was acceptance-tested (or knowingly
+# skipped) before its PR leaves draft. Receipts live in the git common dir, so they
+# are never committed and every worktree of the repo sees the same ones.
+set -euo pipefail
+
+die() { echo "uat-gate: $*" >&2; exit 2; }
+git rev-parse --git-dir >/dev/null 2>&1 || die "not a git repository"
+dir="$(git rev-parse --path-format=absolute --git-common-dir)/uat"
+sha=$(git rev-parse HEAD)
+branch=$(git symbolic-ref --quiet --short HEAD || true)
+mode=$(git config --get uat.gate || echo ask)
+branch_skip=""
+[ -n "$branch" ] && branch_skip=$(git config --get "branch.$branch.uat" || true)
+
+case "${1:-status}" in
+  check)
+    # Exit 0: the PR may proceed; stdout says why ("off", "branch-skip", "receipt <sha>").
+    # Exit 1: gated; stdout is "<mode> <sha>".
+    if [ "$mode" = off ]; then echo off; exit 0; fi
+    if [ "$branch_skip" = skip ]; then echo branch-skip; exit 0; fi
+    if [ -f "$dir/$sha" ]; then echo "receipt $sha"; exit 0; fi
+    echo "$mode $sha"
+    exit 1
+    ;;
+  pass | skip)
+    verdict=$1
+    shift
+    if [ "$verdict" = skip ] && [ "${1:-}" = --branch ]; then
+      [ -n "$branch" ] || die "detached HEAD has no branch to skip"
+      git config "branch.$branch.uat" skip
+      echo "UAT skipped for every commit on $branch"
+      exit 0
+    fi
+    mkdir -p "$dir"
+    printf '%s\t%s\t%s\n' "$verdict" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >"$dir/$sha"
+    echo "UAT $verdict recorded for ${sha:0:7}"
+    ;;
+  mode)
+    case "${2:-}" in ask | auto | off) ;; *) die "usage: uat-gate mode ask|auto|off [--global]" ;; esac
+    if [ "${3:-}" = --global ]; then git config --global uat.gate "$2"; else git config uat.gate "$2"; fi
+    echo "UAT gate mode: $2${3:+ (global)}"
+    ;;
+  reset)
+    rm -f "$dir/$sha"
+    if [ -n "$branch_skip" ]; then git config --unset "branch.$branch.uat"; fi
+    echo "UAT receipt for ${sha:0:7} and branch skip cleared"
+    ;;
+  status)
+    echo "mode:    $mode"
+    echo "branch:  ${branch:-(detached)}${branch_skip:+ (skip)}"
+    echo "HEAD:    ${sha:0:7} $(cat "$dir/$sha" 2>/dev/null || echo 'no receipt')"
+    ;;
+  *)
+    die "usage: uat-gate check | pass [note] | skip [--branch | note] | mode ask|auto|off [--global] | reset | status"
+    ;;
+esac

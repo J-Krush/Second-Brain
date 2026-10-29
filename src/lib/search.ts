@@ -71,17 +71,51 @@ export async function searchQuick(
   return rows.rows as unknown as SearchHit[];
 }
 
+// The last whitespace-separated chunk, the one still being typed. Not a negation (`-x`), part of a
+// quoted phrase, or the operand of `or`; those leave the whole query to websearch.
+const LAST_CHUNK = /^(.*?)(\S+)$/u;
+const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/g;
+
 /**
- * The tsquery for a user string. `any` extracts lexemes with the same
- * normalisation as the indexed column (stopwords gone, stems applied) and
- * ORs them; each is quoted so URLs and apostrophes survive the re-parse.
+ * The full-text condition and rank query for a user string. `any` extracts
+ * lexemes with the same normalisation as the indexed column (stopwords gone,
+ * stems applied) and ORs them; each is quoted so URLs and apostrophes survive
+ * the re-parse. `all` is websearch syntax, except that the last chunk being
+ * typed may match either as a whole term (`node.js`, `shares` via its stem)
+ * or as the start of a word in the title or body. The tokenizer cannot do the
+ * prefix part: `runn` is no prefix of the stem `run`, and a partial
+ * `user@mail.i` parses into tokens that never line up with the whole one.
  */
-function tsquery(q: string, match: SearchFilters["match"]) {
+function ftsMatch(q: string, match: SearchFilters["match"]) {
   if (match === "any") {
-    return sql`(SELECT to_tsquery('english', coalesce(string_agg(quote_literal(lexeme), ' | '), ''))
-                FROM unnest(to_tsvector('english', ${q})))`;
+    const query = sql`(SELECT to_tsquery('english', coalesce(string_agg(quote_literal(lexeme), ' | '), ''))
+                       FROM unnest(to_tsvector('english', ${q})))`;
+    return { where: sql`c.search @@ ${query}`, rank: query };
   }
-  return sql`websearch_to_tsquery('english', ${q})`;
+  const m = LAST_CHUNK.exec(q.trim());
+  const openQuote = (q.match(/"/g)?.length ?? 0) % 2 === 1;
+  if (
+    !m ||
+    openQuote ||
+    m[2]!.includes('"') ||
+    m[2]!.startsWith("-") ||
+    !/[\p{L}\p{N}]/u.test(m[2]!) ||
+    /(^|\s)or\s+$/i.test(m[1]!)
+  ) {
+    const query = sql`websearch_to_tsquery('english', ${q})`;
+    return { where: sql`c.search @@ ${query}`, rank: query };
+  }
+  const rest = sql`websearch_to_tsquery('english', ${m[1]!})`;
+  const last = sql`websearch_to_tsquery('english', ${m[2]!})`;
+  const wordStart = `(^|[^[:alnum:]])${m[2]!.replace(REGEX_SPECIAL, "\\$&")}`;
+  return {
+    // No other terms: `rest` constrains nothing. A stopword as the last chunk (empty `last`) drops
+    // out like websearch drops it, unless it is the only chunk: then it is a prefix being typed.
+    where: sql`(numnode(${rest}) = 0 OR c.search @@ ${rest})
+      AND ((numnode(${last}) = 0 AND numnode(${rest}) > 0) OR c.search @@ ${last}
+           OR (coalesce(c.title, '') || ' ' || coalesce(c.body, '')) ~* ${wordStart})`,
+    rank: sql`(${rest} && ${last})`,
+  };
 }
 
 /**
@@ -93,14 +127,14 @@ export async function searchFts(
   filters: SearchFilters = {},
 ): Promise<SearchHit[]> {
   const limit = filters.limit ?? 50;
-  const query = tsquery(q, filters.match);
+  const { where, rank } = ftsMatch(q, filters.match);
   const rows = await db.execute(sql`
     SELECT c.id, c.type, c.title, c.body, c.url,
            c.created_at AS "createdAt",
-           ts_rank(c.search, ${query}) AS score
+           ts_rank(c.search, ${rank}) AS score
     FROM cards c
     WHERE c.deleted_at IS NULL
-      AND c.search @@ ${query}
+      AND ${where}
       ${typeFragment(filters.type)}
       ${tagFragment(filters.tagId)}
     ORDER BY score DESC
@@ -149,21 +183,19 @@ export interface HybridResult {
 }
 
 /**
- * Hybrid: run FTS and semantic in parallel, fuse with RRF. When embeddings
- * are not configured it degrades to FTS alone and flags `degraded`.
+ * Hybrid: FTS and semantic in parallel, fused with RRF. When embeddings are
+ * not configured semantic drops out and `degraded` is set.
  */
 export async function searchHybrid(
   q: string,
   filters: SearchFilters = {},
 ): Promise<HybridResult> {
-  if (!workersAiConfigured()) {
-    return { hits: await searchFts(q, filters), degraded: true };
-  }
-  const [fts, semantic] = await Promise.all([
+  const semantic = workersAiConfigured();
+  const lists = await Promise.all([
     searchFts(q, filters),
-    searchSemantic(q, filters),
+    ...(semantic ? [searchSemantic(q, filters)] : []),
   ]);
-  const fused = reciprocalRankFusion([fts, semantic]);
+  const fused = lists.length === 1 ? lists[0]! : reciprocalRankFusion(lists);
   const limit = filters.limit ?? 50;
-  return { hits: fused.slice(0, limit), degraded: false };
+  return { hits: fused.slice(0, limit), degraded: !semantic };
 }

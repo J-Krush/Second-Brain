@@ -1,7 +1,7 @@
 "use client";
 
 import { closeCard } from "@/lib/card-url";
-import { emitCardChanged } from "@/lib/card-events";
+import { emitCardChanged, emitWhenLinkPreviewed } from "@/lib/card-events";
 import { useRef, useState } from "react";
 import type { CardDetail } from "@/lib/cards";
 import { uploadFile } from "@/lib/upload-client";
@@ -74,6 +74,11 @@ export function CardEditor({
     if (res.ok) {
       setSavedAt(new Date().toLocaleTimeString());
       emitCardChanged(card.id);
+      // The server re-fetches the preview only when the target or type changed.
+      if (type === "link" && url && (url !== (card.url ?? "") || type !== card.type)) {
+        const { card: saved } = (await res.json()) as { card: { id: string; props: unknown } };
+        emitWhenLinkPreviewed(saved);
+      }
       onSaved?.();
     }
   }
