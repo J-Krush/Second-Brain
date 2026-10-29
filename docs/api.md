@@ -45,7 +45,7 @@ curl -X POST https://<your-worker>/api/cards \
 
 | Method | Path | Query | Notes |
 | --- | --- | --- | --- |
-| `GET` | `/api/search` | `?q=&mode=quick\|fts\|semantic\|hybrid&type=&tag=&match=all\|any` | `{ mode, hits, degraded }`. Default `hybrid` = RRF of fts + semantic; `score` is the fused score. `semantic` → `503 {"error":"embeddings not configured"}` when no provider; `hybrid` drops semantic and returns `degraded: true`. `match=any` ORs the query's lexemes (fts/hybrid only); default `all` is websearch syntax, every term required, with a trailing plain word also matching as a prefix |
+| `GET` | `/api/search` | `?q=&mode=quick\|fts\|semantic\|hybrid&type=&tag=&match=all\|any` | `{ mode, hits, degraded }`. Default `hybrid` = RRF of fts + semantic; `score` is the fused score. `semantic` → `503 {"error":"embeddings not configured"}` when no provider; `hybrid` drops semantic and returns `degraded: true`. `match=any` ORs the query's lexemes (fts/hybrid only); default `all` is websearch syntax, every term required, with the last chunk also matching as the start of a word (`runn`, `example.c`) |
 
 ## Ask
 

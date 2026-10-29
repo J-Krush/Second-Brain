@@ -71,20 +71,20 @@ export async function searchQuick(
   return rows.rows as unknown as SearchHit[];
 }
 
-// A trailing word still being typed: preceded by the start, whitespace, or a separator the
-// parser splits on (an apostrophe). `.@/-_:+` join tokens (`node.js`, `a@b.io`, `/usr/bin`,
-// `state-of-the-art`), and a leading `-` is negation, so those stay whole terms.
-const TRAILING_WORD = /^(|.*[^.@/\-_:+\p{L}\p{N}])([\p{L}\p{N}]+)$/u;
+// The last whitespace-separated chunk, the one still being typed. Not a negation (`-x`), part of a
+// quoted phrase, or the operand of `or`; those leave the whole query to websearch.
+const LAST_CHUNK = /^(.*?)(\S+)$/u;
+const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/g;
 
 /**
  * The full-text condition and rank query for a user string. `any` extracts
  * lexemes with the same normalisation as the indexed column (stopwords gone,
  * stems applied) and ORs them; each is quoted so URLs and apostrophes survive
- * the re-parse. `all` is websearch syntax, except that a trailing word being
- * typed also matches as a prefix, so a search box finds "share sheet" from
- * `shar` while every other term must still match. The prefix is tried against
- * the stemmed index and against the unstemmed words, because a prefix longer
- * than the stem (`runn` for "running", stem `run`) reaches no stemmed lexeme.
+ * the re-parse. `all` is websearch syntax, except that the last chunk being
+ * typed may match either as a whole term (`node.js`, `shares` via its stem)
+ * or as the start of a word in the title or body. The tokenizer cannot do the
+ * prefix part: `runn` is no prefix of the stem `run`, and a partial
+ * `user@mail.i` parses into tokens that never line up with the whole one.
  */
 function ftsMatch(q: string, match: SearchFilters["match"]) {
   if (match === "any") {
@@ -92,22 +92,29 @@ function ftsMatch(q: string, match: SearchFilters["match"]) {
                        FROM unnest(to_tsvector('english', ${q})))`;
     return { where: sql`c.search @@ ${query}`, rank: query };
   }
-  const m = TRAILING_WORD.exec(q.trim());
+  const m = LAST_CHUNK.exec(q.trim());
   const openQuote = (q.match(/"/g)?.length ?? 0) % 2 === 1;
-  if (!m || openQuote || /(^|\s)or\s+$/i.test(m[1]!)) {
+  if (
+    !m ||
+    openQuote ||
+    m[2]!.includes('"') ||
+    m[2]!.startsWith("-") ||
+    !/[\p{L}\p{N}]/u.test(m[2]!) ||
+    /(^|\s)or\s+$/i.test(m[1]!)
+  ) {
     const query = sql`websearch_to_tsquery('english', ${q})`;
     return { where: sql`c.search @@ ${query}`, rank: query };
   }
   const rest = sql`websearch_to_tsquery('english', ${m[1]!})`;
-  const stem = sql`to_tsquery('english', quote_literal(${m[2]!}) || ':*')`;
-  const raw = sql`to_tsquery('simple', quote_literal(${m[2]!}) || ':*')`;
+  const last = sql`websearch_to_tsquery('english', ${m[2]!})`;
+  const wordStart = `(^|[^[:alnum:]])${m[2]!.replace(REGEX_SPECIAL, "\\$&")}`;
   return {
-    // No other terms: `rest` constrains nothing. A stopword as the last word (empty `stem`) drops
-    // out like websearch drops it, unless it is the only word: then it is a prefix being typed.
+    // No other terms: `rest` constrains nothing. A stopword as the last chunk (empty `last`) drops
+    // out like websearch drops it, unless it is the only chunk: then it is a prefix being typed.
     where: sql`(numnode(${rest}) = 0 OR c.search @@ ${rest})
-      AND ((numnode(${stem}) = 0 AND numnode(${rest}) > 0) OR c.search @@ ${stem}
-           OR to_tsvector('simple', coalesce(c.title,'') || ' ' || coalesce(c.body,'')) @@ ${raw})`,
-    rank: sql`(${rest} && ${stem})`,
+      AND ((numnode(${last}) = 0 AND numnode(${rest}) > 0) OR c.search @@ ${last}
+           OR (coalesce(c.title, '') || ' ' || coalesce(c.body, '')) ~* ${wordStart})`,
+    rank: sql`(${rest} && ${last})`,
   };
 }
 

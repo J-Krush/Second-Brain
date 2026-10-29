@@ -150,7 +150,6 @@ test("adversarial: the prefix never stands in for another term or a filter", asy
 });
 
 test("adversarial: a punctuation-joined term matches as a prefix while typing", async ({ page, request, marker, track }) => {
-  test.fail(true, "F7: a last term containing .@/-_: stays whole, so `example.c` does not prefix-match `example.com`");
   const res = await request.post("/api/cards", {
     data: { title: `${marker} stack`, body: "notes on node.js, example.com, user@mail.io and state-of-the-art" },
   });
