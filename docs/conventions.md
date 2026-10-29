@@ -65,6 +65,9 @@ Type: `font-display` (Bricolage Grotesque) for titles, `font-sans` (Space Grotes
 - **Run the thing.** Open the dev server and exercise the changed path end to end — click it, press the key, hit the route with `curl`, check the row in `psql`. Screenshots in the PR are welcome.
 - Bugs: reproduce before, confirm after.
 - New pure logic with real edge cases gets a vitest case next to it (`src/lib/*.test.ts`). Do not write tests that pin wording, wiring, or incidental defaults; do not mock the DB to test a query.
+- **User flows have a contract in `specs/*.md`** (format in `specs/README.md`) and a Playwright test in `tests/` with matching `// spec:` header. A change to a flow updates its spec in the same PR; a new flow gets one. Run `pnpm e2e` against the running app (`UAT_BASE_URL`, default `http://localhost:3001`).
+- **A branch gets one adversarial UAT pass before its PR leaves draft**, by the `uat-qa` agent (fresh context, `.claude/skills/uat`), not by whoever built it **(not obvious)**. Subagents building pieces of a branch do not run it. A hook gates `gh pr create` (non-draft) and `gh pr ready` and asks: run UAT, skip, or open a draft. Run the PR command on its own (the gate refuses `git commit && gh pr create`, since HEAD would move after the check), and only the user skips: the hooks ask before any `uat-gate skip`/`mode`. Receipts are per commit, kept in `.git/uat/`; `.claude/skills/uat/bin/uat-gate status|skip|mode ask|auto|off` manages them (mode is per clone).
+- A confirmed bug you are not fixing becomes `test.fail(true, "F<n>: cause")` on a test asserting the **correct** behaviour **(not obvious)**. Never `test.skip`/`fixme` it: `test.fail` reports an unexpected pass the day it is fixed, which forces the annotation off.
 - Edge-sensitive changes (`worker.ts`, bindings, `wrangler.jsonc`, anything touching `getCloudflareContext`) get a `pnpm preview` run.
 
 ## Adding things — recipes
