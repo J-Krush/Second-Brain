@@ -81,7 +81,6 @@ test("adversarial: results belong to the final query even when its request fails
 });
 
 test("adversarial: a last term with inner punctuation still matches as a whole term", async ({ page, request, marker, track }) => {
-  test.fail(true, "F5: tsquery() splits the trailing alphanumeric run off node.js/example.com/v1.2, so the whole token never matches");
   const res = await request.post("/api/cards", {
     data: { title: `${marker} stack`, body: "notes on node.js, example.com and v1.2" },
   });
@@ -106,7 +105,6 @@ test("adversarial: a last term with inner punctuation still matches as a whole t
 });
 
 test("4. prefix of an inflected word matches while typing", async ({ page, request, marker, track }) => {
-  test.fail(true, "F6: the typed prefix is stemmed and prefix-matched against stems; runn:* never reaches the lexeme run");
   const res = await request.post("/api/cards", { data: { title: `${marker} running shoes` } });
   expect(res.status()).toBe(201);
   track((await res.json()).card.id);

@@ -71,26 +71,44 @@ export async function searchQuick(
   return rows.rows as unknown as SearchHit[];
 }
 
-// A trailing plain word, the one still being typed. Not after `-` (negation), `or`, or inside an open quote.
-const TRAILING_WORD = /^(.*?)([\p{L}\p{N}]+)$/u;
+// A trailing word still being typed: preceded by the start, whitespace, or a separator the
+// parser splits on (an apostrophe). `.@/-_:+` join tokens (`node.js`, `a@b.io`, `/usr/bin`,
+// `state-of-the-art`), and a leading `-` is negation, so those stay whole terms.
+const TRAILING_WORD = /^(|.*[^.@/\-_:+\p{L}\p{N}])([\p{L}\p{N}]+)$/u;
 
 /**
- * The tsquery for a user string. `any` extracts lexemes with the same
- * normalisation as the indexed column (stopwords gone, stems applied) and
- * ORs them; each is quoted so URLs and apostrophes survive the re-parse.
- * `all` is websearch syntax, except that a trailing plain word also matches
- * as a prefix, so a search box finds "share sheet" from `shar` while every
- * other term must still match.
+ * The full-text condition and rank query for a user string. `any` extracts
+ * lexemes with the same normalisation as the indexed column (stopwords gone,
+ * stems applied) and ORs them; each is quoted so URLs and apostrophes survive
+ * the re-parse. `all` is websearch syntax, except that a trailing word being
+ * typed also matches as a prefix, so a search box finds "share sheet" from
+ * `shar` while every other term must still match. The prefix is tried against
+ * the stemmed index and against the unstemmed words, because a prefix longer
+ * than the stem (`runn` for "running", stem `run`) reaches no stemmed lexeme.
  */
-function tsquery(q: string, match: SearchFilters["match"]) {
+function ftsMatch(q: string, match: SearchFilters["match"]) {
   if (match === "any") {
-    return sql`(SELECT to_tsquery('english', coalesce(string_agg(quote_literal(lexeme), ' | '), ''))
-                FROM unnest(to_tsvector('english', ${q})))`;
+    const query = sql`(SELECT to_tsquery('english', coalesce(string_agg(quote_literal(lexeme), ' | '), ''))
+                       FROM unnest(to_tsvector('english', ${q})))`;
+    return { where: sql`c.search @@ ${query}`, rank: query };
   }
   const m = TRAILING_WORD.exec(q.trim());
   const openQuote = (q.match(/"/g)?.length ?? 0) % 2 === 1;
-  if (!m || openQuote || /(^|\s)(-|or\s+)$/i.test(m[1]!)) return sql`websearch_to_tsquery('english', ${q})`;
-  return sql`(websearch_to_tsquery('english', ${m[1]!}) && to_tsquery('english', quote_literal(${m[2]!}) || ':*'))`;
+  if (!m || openQuote || /(^|\s)or\s+$/i.test(m[1]!)) {
+    const query = sql`websearch_to_tsquery('english', ${q})`;
+    return { where: sql`c.search @@ ${query}`, rank: query };
+  }
+  const rest = sql`websearch_to_tsquery('english', ${m[1]!})`;
+  const stem = sql`to_tsquery('english', quote_literal(${m[2]!}) || ':*')`;
+  const raw = sql`to_tsquery('simple', quote_literal(${m[2]!}) || ':*')`;
+  return {
+    // No other terms: `rest` constrains nothing. A stopword as the last word (empty `stem`) drops
+    // out like websearch drops it, unless it is the only word: then it is a prefix being typed.
+    where: sql`(numnode(${rest}) = 0 OR c.search @@ ${rest})
+      AND ((numnode(${stem}) = 0 AND numnode(${rest}) > 0) OR c.search @@ ${stem}
+           OR to_tsvector('simple', coalesce(c.title,'') || ' ' || coalesce(c.body,'')) @@ ${raw})`,
+    rank: sql`(${rest} && ${stem})`,
+  };
 }
 
 /**
@@ -102,14 +120,14 @@ export async function searchFts(
   filters: SearchFilters = {},
 ): Promise<SearchHit[]> {
   const limit = filters.limit ?? 50;
-  const query = tsquery(q, filters.match);
+  const { where, rank } = ftsMatch(q, filters.match);
   const rows = await db.execute(sql`
     SELECT c.id, c.type, c.title, c.body, c.url,
            c.created_at AS "createdAt",
-           ts_rank(c.search, ${query}) AS score
+           ts_rank(c.search, ${rank}) AS score
     FROM cards c
     WHERE c.deleted_at IS NULL
-      AND c.search @@ ${query}
+      AND ${where}
       ${typeFragment(filters.type)}
       ${tagFragment(filters.tagId)}
     ORDER BY score DESC
