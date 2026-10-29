@@ -121,3 +121,57 @@ test("4. prefix of an inflected word matches while typing", async ({ page, reque
     await expect(palette, typed).toContainText(`${marker} running shoes`, { timeout: 1_000 });
   }
 });
+
+test("adversarial: the prefix never stands in for another term or a filter", async ({ request, marker, track }) => {
+  const decoy = `zz${marker.split("").reverse().join("")}`;
+  for (const data of [
+    { title: `${marker} running shoes` },
+    { title: `${decoy} running late` },
+    { type: "quote", title: `${marker} quoted`, body: "better studies" },
+  ]) {
+    const res = await request.post("/api/cards", { data });
+    expect(res.status()).toBe(201);
+    track((await res.json()).card.id);
+  }
+  const titles = async (q: string, extra = "") => {
+    const body: { hits: { title: string | null }[] } = await (
+      await request.get(`/api/search?mode=hybrid&q=${encodeURIComponent(q)}${extra}`)
+    ).json();
+    return body.hits.map((h) => h.title);
+  };
+  // `runn` reaches "running" only through the unstemmed words; the marker must still match.
+  const runn = await titles(`${marker} runn`);
+  expect(runn).toContain(`${marker} running shoes`);
+  expect(runn).not.toContain(`${decoy} running late`);
+  expect(await titles(`${marker} zqxban runn`)).toEqual([]);
+  expect(await titles(`${marker} -shoes runn`)).not.toContain(`${marker} running shoes`);
+  expect(await titles(`${marker} studi`, "&type=quote")).toEqual([`${marker} quoted`]);
+  expect(await titles(`${marker} runn`, "&type=quote")).toEqual([]);
+});
+
+test("adversarial: a punctuation-joined term matches as a prefix while typing", async ({ page, request, marker, track }) => {
+  test.fail(true, "F7: a last term containing .@/-_: stays whole, so `example.c` does not prefix-match `example.com`");
+  const res = await request.post("/api/cards", {
+    data: { title: `${marker} stack`, body: "notes on node.js, example.com, user@mail.io and state-of-the-art" },
+  });
+  expect(res.status()).toBe(201);
+  track((await res.json()).card.id);
+
+  const titles = async (q: string) => {
+    const body: { hits: { title: string | null }[] } = await (
+      await request.get(`/api/search?mode=hybrid&q=${encodeURIComponent(q)}`)
+    ).json();
+    return body.hits.map((h) => h.title);
+  };
+  for (const typed of ["example.c", "node.j", "user@mail", "state-of"]) {
+    expect(await titles(`${marker} ${typed}`), typed).toContain(`${marker} stack`);
+  }
+
+  const palette = page.getByRole("dialog", { name: "Search" });
+  await pressUntilVisible(page, "/", palette);
+  const q = `${marker} example.co`;
+  const landed = page.waitForResponse((r) => new URL(r.url()).searchParams.get("q") === q);
+  await page.getByRole("combobox", { name: "Search" }).fill(q);
+  await landed;
+  await expect(palette).toContainText(`${marker} stack`, { timeout: 1_000 });
+});
