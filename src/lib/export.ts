@@ -1,8 +1,9 @@
-import { eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { Zip, ZipDeflate, strToU8 } from "fflate";
 import { db } from "@/db";
-import { cardTags, cards, files, tags } from "@/db/schema";
+import { cardChunks, cardTags, cards, files, tags, transcripts } from "@/db/schema";
 import { extForMime } from "./files";
+import { fmtTimestamp } from "./format";
 import { getObjectBytes } from "./r2";
 
 function yamlString(value: string): string {
@@ -81,9 +82,27 @@ export function buildExportArchive(): ReadableStream<Uint8Array> {
             tagsByCard.set(r.cardId, list);
           }
 
+          // Finished transcripts only; partial ones would export as if complete.
+          const chunkRows = await db
+            .select({ cardId: cardChunks.cardId, startMs: cardChunks.startMs, text: cardChunks.text })
+            .from(cardChunks)
+            .innerJoin(
+              transcripts,
+              and(eq(transcripts.cardId, cardChunks.cardId), eq(transcripts.status, "done")),
+            )
+            .orderBy(asc(cardChunks.cardId), asc(cardChunks.seq));
+          const transcriptByCard: Record<string, string[]> = {};
+          for (const c of chunkRows) {
+            if (!c.text) continue;
+            const stamp = c.startMs === null ? "" : `**[${fmtTimestamp(c.startMs)}]** `;
+            (transcriptByCard[c.cardId] ??= []).push(stamp + c.text);
+          }
+
           for (const card of allCards) {
+            const paragraphs = transcriptByCard[card.id];
+            const transcript = paragraphs ? `\n\n## Transcript\n\n${paragraphs.join("\n\n")}` : "";
             const md =
-              frontmatter(card, tagsByCard.get(card.id) ?? []) + (card.body ?? "");
+              frontmatter(card, tagsByCard.get(card.id) ?? []) + (card.body ?? "") + transcript;
             addEntry(`cards/${card.id}.md`, strToU8(md));
           }
 

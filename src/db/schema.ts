@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  bigserial,
   customType,
   doublePrecision,
   index,
@@ -11,9 +12,11 @@ import {
   serial,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { TranscriptSource, TranscriptStatus } from "@/lib/transcripts";
 
 /**
  * Drizzle schema mirrors src/db/0000_init.sql plus later migrations
@@ -164,6 +167,48 @@ export const fileRefs = pgTable(
     role: text("role").notNull(),
   },
   (t) => [primaryKey({ columns: [t.fileId, t.cardId, t.role] })],
+);
+
+// One per card: the state of its transcript capture. Text lives in card_chunks.
+export const transcripts = pgTable("transcripts", {
+  cardId: uuid("card_id")
+    .primaryKey()
+    .references(() => cards.id, { onDelete: "cascade" }),
+  status: text("status").$type<TranscriptStatus>().notNull(),
+  source: text("source").$type<TranscriptSource>().notNull(),
+  fileId: uuid("file_id").references(() => files.id, { onDelete: "set null" }),
+  language: text("language"),
+  model: text("model"),
+  totalChunks: integer("total_chunks"),
+  error: text("error"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// Transcript passages, searched and embedded individually so a hit can point at a timestamp.
+export const cardChunks = pgTable(
+  "card_chunks",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    cardId: uuid("card_id")
+      .notNull()
+      .references(() => cards.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    startMs: integer("start_ms"),
+    endMs: integer("end_ms"),
+    text: text("text").notNull(),
+    search: tsvector("search"),
+    embedding: vector("embedding"),
+  },
+  (t) => [
+    unique("card_chunks_card_id_seq_key").on(t.cardId, t.seq),
+    index("card_chunks_search_idx").using("gin", t.search),
+    index("card_chunks_embedding_idx").using("hnsw", t.embedding.op("vector_cosine_ops")),
+  ],
 );
 
 // Login rate limiting: fixed-window counter, serverless-safe (in-memory is not).

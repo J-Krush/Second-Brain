@@ -92,6 +92,18 @@ export async function putObject(
   }
 }
 
+/**
+ * Signed GET whose body is handed back unread, so large media can be piped
+ * through a route without buffering it in the Worker's memory.
+ */
+export async function getObjectStream(
+  key: string,
+): Promise<{ body: ReadableStream<Uint8Array>; size: string | null } | null> {
+  const res = await s3().fetch(objectUrl(key));
+  if (!res.ok || !res.body) return null;
+  return { body: res.body, size: res.headers.get("content-length") };
+}
+
 export async function getObjectBytes(key: string): Promise<Buffer | null> {
   try {
     const res = await s3().fetch(objectUrl(key));

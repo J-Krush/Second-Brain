@@ -1,4 +1,5 @@
 import { type AskSettings, DEFAULT_ASK_SETTINGS } from "./ask-config";
+import { fmtTimestamp } from "./format";
 import { llmProvider, type LlmMessage } from "./llm";
 import { searchFts, searchHybrid, searchSemantic, type SearchFilters, type SearchHit } from "./search";
 import { getAskSettings } from "./settings";
@@ -31,8 +32,11 @@ export type AskEvent =
   | { type: "error"; message: string };
 
 export function toSource(hit: SearchHit, index: number, excerptChars = DEFAULT_ASK_SETTINGS.excerptChars): AskSource {
-  // Inline image embeds carry nothing a model can read (same pattern as INLINE_FILE_RE in brain/item.ts).
-  const raw = (hit.body ?? hit.url ?? "").replace(/!\[[^\]]*\]\(file:[0-9a-f-]+\)/gi, "");
+  // File embeds and attachment links carry nothing a model can read (same pattern as INLINE_FILE_RE in brain/item.ts).
+  const body = (hit.body ?? hit.url ?? "").replace(/!?\[[^\]]*\]\(file:[0-9a-f-]+\)/gi, "");
+  // A transcript hit leads with the passage that matched, or the model reads a body without the evidence.
+  const stamp = hit.match?.startMs == null ? "" : ` at ${fmtTimestamp(hit.match.startMs)}`;
+  const raw = hit.match ? `Transcript${stamp}: ${hit.match.text}\n\n${body}` : body;
   const collapsed = raw.replace(/[ \t]+/g, " ").replace(/ ?\n ?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   const excerpt = collapsed.length > excerptChars ? collapsed.slice(0, excerptChars) + "…" : collapsed;
   return {

@@ -11,9 +11,11 @@ import { styleFor } from "@/components/card-style";
 import { emitCardChanged, onCardChanged } from "@/lib/card-events";
 import { cardParam, closeCard } from "@/lib/card-url";
 import type { CardDetail } from "@/lib/cards";
-import { relativeTime } from "@/lib/format";
+import { fmtTimestamp, relativeTime } from "@/lib/format";
 import { renderMarkdown } from "@/lib/markdown";
 import { sourceOf } from "@/lib/source";
+import { resumeUpload, transcribeUpload } from "@/lib/transcribe-client";
+import { youtubeTimestampUrl, youtubeVideoId } from "@/lib/youtube";
 import { BoardPicker } from "./BoardPicker";
 import { RelationEditor } from "./RelationEditor";
 
@@ -24,6 +26,14 @@ interface TagRef {
 }
 
 type Card = CardDetail["card"];
+
+/** Chunks sent so far by an upload transcript running in this modal; `total` is 0 while the file decodes. */
+interface UploadProgress {
+  done: number;
+  total: number;
+}
+
+const TRANSCRIPT_POLL_MS = 2000;
 
 /** Detail modal driven by `?card=<id>`; mount once per page that lists cards. */
 export function CardModal() {
@@ -140,10 +150,222 @@ function Hero({ detail }: { detail: CardDetail }) {
       return (
         <div className="mt-4 rounded-lg bg-surface px-3 py-3">
           <Waveform seed={hero.fileId} bars={56} className="h-9 w-full" />
-          <audio controls preload="metadata" src={fileUrl(hero.fileId, "original")} className="mt-2 w-full" />
+          <audio
+            controls
+            preload="metadata"
+            data-transcript-media
+            src={fileUrl(hero.fileId, "original")}
+            className="mt-2 w-full"
+          />
         </div>
       );
+    case "video":
+      return (
+        <video
+          controls
+          preload="metadata"
+          data-transcript-media
+          src={fileUrl(hero.fileId, "original")}
+          className="mt-4 w-full rounded-md ring-1 ring-line"
+        />
+      );
   }
+}
+
+const ACTION_BUTTON = "normal-case tracking-normal text-ink-faint hover:text-ink disabled:opacity-50";
+const PRIMARY_BUTTON =
+  "rounded border border-accent/30 px-2 py-0.5 font-mono text-[11px] text-accent hover:bg-accent/10 disabled:opacity-50";
+const START_CAPTIONS: RequestInit = {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ source: "youtube" }),
+};
+
+/**
+ * Transcript for a YouTube link (server-fetched captions) or an attached
+ * audio/video file (decoded in the browser, transcribed chunk by chunk). Upload
+ * progress lives in the panel so toggling edit mode mid-run doesn't offer a
+ * duplicate "resume" while chunks are still being sent.
+ */
+function TranscriptSection({
+  detail,
+  upload,
+  setUpload,
+  reload,
+  toast,
+}: {
+  detail: CardDetail;
+  upload: UploadProgress | null;
+  setUpload: (p: UploadProgress | null) => void;
+  reload: () => Promise<void>;
+  toast: (message: string) => void;
+}) {
+  const { card, files, transcript } = detail;
+  const [busy, setBusy] = useState(false);
+  const videoId = youtubeVideoId(card.url);
+  const media = files.find((f) => f.mime.startsWith("audio/") || f.mime.startsWith("video/"));
+  const polling =
+    transcript?.source === "youtube" && (transcript.status === "pending" || transcript.status === "running");
+
+  // Captions are fetched in the background after the POST returns; poll until the row settles.
+  useEffect(() => {
+    if (!polling) return;
+    const timer = window.setInterval(() => void reload(), TRANSCRIPT_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [polling, reload]);
+
+  if (!videoId && !media) return null;
+
+  async function request(init: RequestInit, failure: string) {
+    setBusy(true);
+    const res = await fetch(`/api/cards/${card.id}/transcribe`, init).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) toast(failure);
+    else emitCardChanged(card.id);
+  }
+
+  async function runUpload(fileId: string, haveSeqs: number[] | null) {
+    setUpload({ done: 0, total: 0 });
+    const onProgress = (done: number, total: number) => setUpload({ done, total });
+    try {
+      if (haveSeqs) await resumeUpload(card.id, fileId, haveSeqs, onProgress);
+      else await transcribeUpload(card.id, fileId, onProgress);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "transcription failed");
+    } finally {
+      setUpload(null);
+    }
+  }
+
+  const uploadFileId = transcript?.fileId ?? media?.id ?? null;
+  const restart = () => {
+    if (transcript?.source === "youtube") void request(START_CAPTIONS, "couldn't fetch captions");
+    else if (uploadFileId) void runUpload(uploadFileId, null);
+  };
+  const working = busy || upload !== null || polling;
+
+  function seek(startMs: number) {
+    const el = document.querySelector<HTMLMediaElement>("[data-transcript-media]");
+    if (el) {
+      el.currentTime = startMs / 1000;
+      el.play().catch(() => {});
+    } else if (uploadFileId) {
+      // The hero is an image when the body embeds one first; fall back to the file with a media fragment.
+      window.open(`${fileUrl(uploadFileId, "original")}#t=${Math.floor(startMs / 1000)}`, "_blank", "noreferrer");
+    }
+  }
+
+  let content: ReactNode;
+  if (upload) {
+    content = (
+      <p className="font-mono text-[11px] text-ink-faint">
+        {upload.total === 0 ? "decoding audio…" : `transcribing ${upload.done} / ${upload.total}`}
+      </p>
+    );
+  } else if (!transcript) {
+    content = (
+      <div className="flex flex-wrap gap-2">
+        {videoId && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void request(START_CAPTIONS, "couldn't fetch captions")}
+            className={PRIMARY_BUTTON}
+          >
+            fetch captions
+          </button>
+        )}
+        {media && (
+          <button type="button" onClick={() => void runUpload(media.id, null)} className={PRIMARY_BUTTON}>
+            transcribe audio
+          </button>
+        )}
+      </div>
+    );
+  } else if (polling) {
+    content = <p className="font-mono text-[11px] text-ink-faint">fetching captions…</p>;
+  } else if (transcript.status === "running" || transcript.status === "pending") {
+    // An upload transcript left running by an earlier session: the browser that was sending chunks is gone.
+    content = (
+      <div className="flex flex-wrap items-center gap-3 font-mono text-[11px] text-ink-faint">
+        <span>
+          transcribed {transcript.chunks.length} / {transcript.totalChunks ?? "?"}
+        </span>
+        {uploadFileId && (
+          <button
+            type="button"
+            onClick={() => void runUpload(uploadFileId, transcript.chunks.map((c) => c.seq))}
+            className={PRIMARY_BUTTON}
+          >
+            resume
+          </button>
+        )}
+      </div>
+    );
+  } else if (transcript.status === "unavailable") {
+    content = <p className="font-mono text-[11px] text-ink-faint">no captions on this video</p>;
+  } else if (transcript.status === "failed") {
+    content = (
+      <div className="flex flex-wrap items-center gap-3 font-mono text-[11px]">
+        <span className="text-red">{transcript.error ?? "transcription failed"}</span>
+        <button type="button" disabled={busy} onClick={restart} className={PRIMARY_BUTTON}>
+          retry
+        </button>
+      </div>
+    );
+  } else {
+    content = (
+      <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-2">
+        {transcript.chunks.map((c) => {
+          const startMs = c.startMs;
+          const stampClass = "mr-2 font-mono text-[11px] text-ink-faint hover:text-accent";
+          return (
+            <p key={c.seq} className="text-[14px] leading-relaxed text-ink-dim">
+              {startMs !== null &&
+                (transcript.source === "youtube" && videoId ? (
+                  <a href={youtubeTimestampUrl(videoId, startMs)} target="_blank" rel="noreferrer" className={stampClass}>
+                    {fmtTimestamp(startMs)}
+                  </a>
+                ) : (
+                  <button type="button" onClick={() => seek(startMs)} className={stampClass}>
+                    {fmtTimestamp(startMs)}
+                  </button>
+                ))}
+              {c.text}
+            </p>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const terminal = transcript && !working && transcript.status !== "running" && transcript.status !== "pending";
+  return (
+    <Section
+      label="Transcript"
+      action={
+        (terminal || (transcript?.source === "upload" && !working)) && (
+          <span className="flex items-center gap-3">
+            {transcript?.status === "done" && (
+              <button type="button" onClick={restart} className={ACTION_BUTTON}>
+                redo
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void request({ method: "DELETE" }, "couldn't remove transcript")}
+              className={ACTION_BUTTON}
+            >
+              remove
+            </button>
+          </span>
+        )
+      }
+    >
+      {content}
+    </Section>
+  );
 }
 
 function CardModalPanel({ id }: { id: string }) {
@@ -155,6 +377,7 @@ function CardModalPanel({ id }: { id: string }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
   const { show: showToast, node: toastNode } = useToast();
+  const [upload, setUpload] = useState<UploadProgress | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/cards/${id}`).catch(() => null);
@@ -311,6 +534,8 @@ function CardModalPanel({ id }: { id: string }) {
             <Hero detail={detail} />
 
             {html && <div className="prose-sb mt-4" dangerouslySetInnerHTML={{ __html: html }} />}
+
+            <TranscriptSection detail={detail} upload={upload} setUpload={setUpload} reload={load} toast={showToast} />
 
             {untriaged && (
               <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-dashed border-line-2 px-3 py-2.5 font-mono text-[11px] text-ink-faint">

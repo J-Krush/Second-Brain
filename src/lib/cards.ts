@@ -4,6 +4,7 @@ import { cardTags, cards, edges, fileRefs, files, placements, tags } from "@/db/
 import { syncInlineRefs } from "./filerefs";
 import { canonicalUrl } from "./link-url";
 import { sourceFacetLabel, sourceOf, type SourceFilter } from "./source";
+import { getTranscript, type Transcript } from "./transcripts";
 
 // Columns safe to ship to the client: excludes the 1024-float `embedding` and
 // the internal generated `search` tsvector. Used for every read + returning().
@@ -299,6 +300,7 @@ export interface CardDetail {
   files: FileRef[];
   links: RelatedCard[]; // outgoing
   backlinks: RelatedCard[];
+  transcript: Transcript | null;
 }
 
 export async function getCardDetail(id: string): Promise<CardDetail | null> {
@@ -332,6 +334,7 @@ export async function getCardDetail(id: string): Promise<CardDetail | null> {
     .where(and(eq(edges.toCard, id), isNull(cards.deletedAt)));
 
   const fileMap = await filesFor([id]);
+  const transcript = await getTranscript(id);
 
   return {
     card,
@@ -340,6 +343,7 @@ export async function getCardDetail(id: string): Promise<CardDetail | null> {
     files: fileMap.get(id) ?? [],
     links: linkRows,
     backlinks: backlinkRows,
+    transcript,
   };
 }
 

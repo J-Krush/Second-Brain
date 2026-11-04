@@ -248,6 +248,7 @@ function EntryBody({ card }: { card: BrainCard }) {
         </div>
       );
     case "audio":
+    case "video":
       return (
         <div>
           {title && <div className="mb-2">{title}</div>}

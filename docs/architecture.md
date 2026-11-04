@@ -8,7 +8,8 @@ flowchart LR
   W -->|HYPERDRIVE binding<br/>pg driver, per-request pool| N[(Neon Postgres<br/>pgvector · pg_trgm)]
   W -->|S3 API, presigned URLs| R2[(R2 bucket<br/>private)]
   W -->|IMAGES binding| IMG[Cloudflare Images<br/>webp thumbnails]
-  W -->|AI binding| AI[Workers AI<br/>bge-m3 embeddings]
+  W -->|AI binding| AI[Workers AI<br/>bge-m3 embeddings · whisper transcripts]
+  W -.->|Innertube captions| YT[YouTube]
   CRON[Cron Triggers<br/>04:00 GC · hourly embed sweep] --> W
   B -. presigned PUT / GET .-> R2
 ```
@@ -24,44 +25,58 @@ flowchart LR
 | Schema | `src/db/*.sql` + `src/db/schema.ts` | Raw SQL migrations are the source of truth; the Drizzle schema mirrors them for typed queries. `scripts/migrate.ts` applies files alphabetically, tracked in `_migrations` |
 | Object storage | `src/lib/r2.ts` | `aws4fetch` against the S3 API, path-style URLs. `R2_ENDPOINT` overrides the derived Cloudflare endpoint so MinIO (or any S3) is a drop-in |
 | Images | `src/lib/files.ts` | Dimensions + `thumb-400`/`thumb-1200` webp variants via the `IMAGES` binding after upload confirmation |
-| Embeddings | `src/lib/embeddings.ts` | `@cf/baai/bge-m3`, 1024 dims. Uses the `AI` binding when deployed; under `next dev` the binding is a stub, so it uses the Workers AI REST API if `CF_ACCOUNT_ID`/`CF_AI_TOKEN` are set, else embedding is skipped and search degrades to FTS |
-| Background work | `after()` from `next/server` | Link OG capture and embedding run after the response is sent. No job queue; an hourly cron sweep catches anything that was missed |
+| Workers AI | `src/lib/workers-ai.ts` | `aiBinding()` (typed overloads per model shape) and `aiRest()` are the one door to the `AI` binding. Deployed it uses the binding; under `next dev` the binding is a stub, so callers use the Workers AI REST API if `CF_ACCOUNT_ID`/`CF_AI_TOKEN` are set, else `workersAiConfigured()` is false |
+| Embeddings | `src/lib/embeddings.ts` | `@cf/baai/bge-m3`, 1024 dims, batched through `embedTexts`. Without Workers AI, embedding is skipped and search degrades to FTS |
+| Transcripts | `src/lib/transcripts.ts`, `src/lib/youtube.ts`, `src/lib/audio-chunks.ts`, `src/lib/transcribe-client.ts` | YouTube caption tracks server-side; uploaded audio/video decoded and chunked in the browser, each chunk transcribed by `@cf/openai/whisper-large-v3-turbo`. Stored as `transcripts` + `card_chunks` |
+| Background work | `after()` from `next/server` | Link/video OG capture, embedding, and YouTube caption fetch run after the response is sent. No job queue; an hourly cron sweep catches anything that was missed |
 
 ## Domain model in one paragraph
 
-Everything is a row in `cards` with a `type` (`thought`, `quote`, `link`, `video`, `document`, `project`, `board`, `mantra`) and a JSONB `props` bag for type-specific data (tldraw snapshot for boards, OpenGraph metadata for links, `source` provenance for everything). Boards are cards; a card appears on a board through a row in `placements` (`board_id`, `card_id`, `x`, `y`, `w`, `h`, `z`), so membership is many-to-many and nesting is free. `edges` are labelled, described, directed links between cards. `tags`/`card_tags` are flat. `files` + `file_refs` form a reference ledger that drives garbage collection. `triaged_at` separates the inbox (null) from the library. There is deliberately **no `parent_id`**. `settings` is a key → JSONB document store, one row per feature (`ask` today), read through `src/lib/settings.ts` with zod filling defaults.
+Everything is a row in `cards` with a `type` (`thought`, `quote`, `link`, `video`, `document`, `project`, `board`, `mantra`) and a JSONB `props` bag for type-specific data (tldraw snapshot for boards, OpenGraph metadata for links, `source` provenance for everything). Boards are cards; a card appears on a board through a row in `placements` (`board_id`, `card_id`, `x`, `y`, `w`, `h`, `z`), so membership is many-to-many and nesting is free. `edges` are labelled, described, directed links between cards. `tags`/`card_tags` are flat. `files` + `file_refs` form a reference ledger that drives garbage collection. `transcripts` (one per card) and `card_chunks` (time-coded text slices with their own tsvector and vector) hang off a card and cascade with it. `triaged_at` separates the inbox (null) from the library. There is deliberately **no `parent_id`**. `settings` is a key → JSONB document store, one row per feature (`ask` today), read through `src/lib/settings.ts` with zod filling defaults.
 
 ## Capture path
 
 1. `POST /api/cards` (browser composer or bearer client) or `POST /api/share` (Android share target, iOS Shortcut) validates, canonicalises the URL (`src/lib/link-url.ts`), inserts the card, stamps `props.source` (`typed` / `web:<domain>` / `share` / `upload` / `book`), and syncs `file_refs` from `![](file:UUID)` embeds in the body. `/api/share` returns an existing card with the same canonical URL instead of inserting.
-2. `after()`: if it is a link, `captureLink` gets a preview — YouTube's oEmbed for YouTube, nothing for Instagram (login wall), OpenGraph from the page otherwise — downloads the image into R2 as a file with an `og_cache` ref, and writes metadata into `props`. Then `embedCard` hashes `title + body`, skips if unchanged, otherwise embeds and stores the vector.
+2. `after()`: if it is a link or video, `captureLink` gets a preview — YouTube's oEmbed for YouTube, nothing for Instagram (login wall), OpenGraph from the page otherwise — downloads the image into R2 as a file with an `og_cache` ref, and writes metadata into `props`. Then `embedCard` hashes `title + body`, skips if unchanged, otherwise embeds and stores the vector.
 3. The browser emits a `card-changed` window event (`src/lib/card-events.ts`); the stream, inbox count, and facet counts refetch.
 
 ## Files
 
 Upload is client-driven and dedupes on content hash: the client computes sha256 and asks `POST /api/files/presign`; if an `active` file with that hash exists the existing id comes back, otherwise a `pending` row and a presigned PUT. After the PUT the client calls `POST /api/files/:id/confirm`; the server verifies the object, generates variants, and flips the row to `active`. Reads go through `GET /api/files/:id/:variant`, which redirects to a short-TTL presigned GET — the bucket is never public. Nightly GC removes stale `pending` rows, unreferenced `active` files (by prefix), and hard-deletes cards soft-deleted more than 30 days ago. `POST /api/admin/reconcile` diffs bucket keys against `files.r2_prefix` and removes strays.
 
+## Transcripts
+
+Started by hand from the card modal's Transcript section, never automatically (a 2-hour video should not cost anything you did not ask for).
+
+- **YouTube** (`youtubeVideoId(card.url)` matches): `POST /api/cards/:id/transcribe {source:"youtube"}` upserts a `pending` row and `after()` runs `captureYoutubeCaptions` — Innertube `player` → pick manual English > auto English > first track → `timedtext?fmt=json3` → `groupCaptionEvents` into ~1200-char time-coded chunks → embed → `done`. No tracks → `unavailable`; HTTP/playability errors → `failed` with the reason. The modal polls every 2 s until terminal.
+- **Upload** (card has an `audio/*` or `video/*` file): the browser fetches `GET /api/files/:id/original?proxy=1` (R2 presigned URLs carry no CORS headers, so the bytes stream through the Worker), decodes with `AudioContext`, downmixes/resamples to 16 kHz mono, and cuts 240 s ranges (`src/lib/audio-chunks.ts`). `POST …/transcribe {source:"upload", fileId, totalChunks}` opens a `running` row; each chunk is `PUT …/transcribe/:seq` as 16-bit WAV, transcribed synchronously by whisper (`vad_filter` on) and embedded. The row flips to `done` when every seq is stored. A closed tab leaves it `running`; reopening offers resume, which skips stored seqs.
+- The hourly `embed-sweep` re-runs YouTube rows stuck in `pending`/`running` for 10+ minutes and embeds any chunk whose vector is still null.
+
+Limits: browser decode holds the whole PCM in memory (~230 MB/hour of 16 kHz float), so multi-hour files are at the mercy of the tab; YouTube's endpoint is undocumented and may rate-limit Cloudflare egress IPs.
+
 ## Search
 
 `GET /api/search?q=&mode=quick|fts|semantic|hybrid` (`src/lib/search.ts`):
 
 - **quick** — `word_similarity` on `title` (pg_trgm), threshold 0.2; typo-tolerant as-you-type.
-- **fts** — `websearch_to_tsquery` against the generated `search` tsvector, `ts_rank`, title weighted A over body B.
-- **semantic** — cosine distance over `embedding` using the HNSW index; 503 if no embedding provider is configured.
+- **fts** — `websearch_to_tsquery` against the generated `search` tsvector on `cards` (title weighted A over body B) **and** on `card_chunks`, `ts_rank`, best row per card.
+- **semantic** — cosine distance over `cards.embedding` and `card_chunks.embedding`, each branch using its own HNSW index, best row per card; 503 if no embedding provider is configured.
 - **hybrid** (default) — fts and semantic in parallel, merged with reciprocal rank fusion (`src/lib/rrf.ts`, k = 60). Returns `degraded: true` when it had to fall back to fts alone; the UI shows an amber note.
+
+Each card ranks by its best row (its own text or any transcript chunk) and carries its best-matching chunk as `match: { text, startMs }` whenever one matched; the palette shows it as a `m:ss · …` line under the title and `/ask` leads the passage with it.
 
 ## Ask
 
 `POST /api/ask` (`src/lib/ask.ts`, seam in `src/lib/llm.ts`) is retrieval-augmented answering over cards. Every knob comes from the `ask` settings document (`src/lib/ask-config.ts`, stored in the `settings` table, edited on `/settings`):
 
 1. Retrieval per `retrieval` (hybrid / fts / semantic) with `match` (`any` by default: lexemes ORed, so "what do I know about X" doesn't require a card to contain "know") and `sourceLimit` hits.
-2. Hits become numbered passages — title, kind, url, excerpt capped at `excerptChars` with inline image embeds stripped.
+2. Hits become numbered passages — title, kind, url, excerpt capped at `excerptChars` with inline file embeds and attachment links stripped. A hit that matched through a transcript leads with that chunk (`Transcript at m:ss: …`).
 3. `buildMessages()` packs them under `systemPrompt`, which demands `[n]` citations and an honest "not in your notes".
 4. The `LlmProvider` for `provider`/`model` streams text deltas with `maxTokens` and `temperature`; `parseCitations()` extracts the distinct `[n]` on completion.
 
 The route emits NDJSON events (`sources` → `delta`… → `done` | `error`). The first event is awaited before the response is committed, so streaming never touches the request-scoped DB pool. `LlmProvider` is the only model-facing surface: `{ id, model, generate({ messages, maxTokens, temperature, signal }) → AsyncIterable<string> }`, one factory per provider id in `PROVIDERS` in `llm.ts`. `provider: "none"` runs retrieval-only and the page says so.
 
-The one provider today is Workers AI (`src/lib/llm-workers-ai.ts`): `stream: true` through the `AI` binding in the Worker or the REST API in dev, both yielding the same SSE body, parsed by `sseDeltas()` across the three event shapes Cloudflare models emit. `src/lib/workers-ai.ts` is the shared door (binding probe, REST call, `workersAiConfigured()`) for embeddings and generation alike. The settings page prices the current knobs from the neuron table in `ask-config.ts` (worst case: every passage full, answer at `maxTokens`).
+The one provider today is Workers AI (`src/lib/llm-workers-ai.ts`): `stream: true` through the `AI` binding in the Worker or the REST API in dev, both yielding the same SSE body, parsed by `sseDeltas()` across the three event shapes Cloudflare models emit. `src/lib/workers-ai.ts` is the shared door (binding probe, REST call, `workersAiConfigured()`) for embeddings, generation, and speech to text alike. The settings page prices the current knobs from the neuron table in `ask-config.ts` (worst case: every passage full, answer at `maxTokens`).
 
 ## Front end
 
@@ -85,6 +100,6 @@ Styling is Tailwind v4 with design tokens in `src/app/globals.css` (dark ink sur
 | Cron | Route | Purpose |
 | --- | --- | --- |
 | `0 4 * * *` | `GET /api/admin/gc` | Expired soft-deletes, stale pending uploads, orphaned files, bucket purge |
-| `15 * * * *` | `GET /api/admin/embed-sweep` | Embed cards whose text changed since `embedded_at` or that never embedded |
+| `15 * * * *` | `GET /api/admin/embed-sweep` | Embed cards whose text changed since `embedded_at` or that never embedded; retry stuck YouTube transcripts; embed unembedded transcript chunks |
 
 Both are also buttons on `/settings`.

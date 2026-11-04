@@ -45,7 +45,8 @@ interface QuoteFields {
  *    `props.source = {via:"book"}`.
  * 3. Otherwise, if the rest starts with an http(s) URL: type `link`, that URL,
  *    body = whatever follows (or null).
- * 4. Attachments append `![name](file:<id>)` to the body. With no text at all,
+ * 4. Attachments append `![name](file:<id>)` (images) or `[name](file:<id>)` (anything else, e.g.
+ *    audio/video, which render as the hero rather than inline) to the body. With no text at all,
  *    `props.source = {via:"upload", filename}` of the first file, a single file
  *    names the card, and an all-non-image upload is a `document`.
  * 5. An explicit `kind` (the picker) wins over every inferred type.
@@ -81,7 +82,9 @@ export function buildDraft(text: string, files: Uploaded[], quote: QuoteFields |
     }
   }
 
-  const embeds = files.map((f) => `![${f.name.replace(/[[\]]/g, "")}](file:${f.fileId})`).join("\n");
+  const embeds = files
+    .map((f) => `${f.mime.startsWith("image/") ? "!" : ""}[${f.name.replace(/[[\]]/g, "")}](file:${f.fileId})`)
+    .join("\n");
   const body = [rest, embeds].filter(Boolean).join("\n\n") || null;
   if (!title && !body && !url) return null;
 
