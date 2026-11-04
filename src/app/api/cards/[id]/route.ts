@@ -41,7 +41,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   if (!card) return notFound();
   // Re-fetch the OG preview when the link target or type just changed.
   if (
-    card.type === "link" &&
+    (card.type === "link" || card.type === "video") &&
     card.url &&
     (parsed.data.url !== undefined || parsed.data.type !== undefined)
   ) {

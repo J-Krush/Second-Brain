@@ -141,6 +141,35 @@ CREATE TABLE file_refs (
   role    TEXT NOT NULL,                -- 'attachment' | 'inline' | 'cover' | 'og_cache'
   PRIMARY KEY (file_id, card_id, role)
 );
+
+-- Transcripts: one per card, from YouTube captions or Workers AI whisper
+CREATE TABLE transcripts (
+  card_id      UUID PRIMARY KEY REFERENCES cards(id) ON DELETE CASCADE,
+  status       TEXT NOT NULL,           -- 'pending' | 'running' | 'done' | 'unavailable' | 'failed'
+  source       TEXT NOT NULL,           -- 'youtube' | 'upload'
+  file_id      UUID REFERENCES files(id) ON DELETE SET NULL,
+  language     TEXT,
+  model        TEXT,
+  total_chunks INT,
+  error        TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Searchable slices of long text (transcripts today), each with its own tsvector + vector
+CREATE TABLE card_chunks (
+  id        BIGSERIAL PRIMARY KEY,
+  card_id   UUID NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  seq       INT NOT NULL,
+  start_ms  INT,
+  end_ms    INT,
+  text      TEXT NOT NULL,
+  search    TSVECTOR GENERATED ALWAYS AS (to_tsvector('english', text)) STORED,
+  embedding VECTOR(1024),
+  UNIQUE (card_id, seq)
+);
+CREATE INDEX card_chunks_search_idx    ON card_chunks USING GIN (search);
+CREATE INDEX card_chunks_embedding_idx ON card_chunks USING hnsw (embedding vector_cosine_ops);
 ```
 
 ## File lifecycle (R2 + DB stay in sync)
@@ -157,7 +186,11 @@ R2 key layout: `files/{file_id}/original.{ext}`, `files/{file_id}/thumb-400.webp
 
 ## Link capture
 
-When a card of type `link` is saved: server-side fetch of the URL, parse OpenGraph/meta (title, description, image), download the OG image into R2 as a file with role `og_cache`, store metadata in `props`. Boards must never depend on remote images that can rot. YouTube uses its oEmbed endpoint instead of the page; Instagram is not fetched (it serves only a login wall). URLs are canonicalised on save so a link shared twice from a phone lands on the same card.
+When a card of type `link` or `video` is saved: server-side fetch of the URL, parse OpenGraph/meta (title, description, image), download the OG image into R2 as a file with role `og_cache`, store metadata in `props`. Boards must never depend on remote images that can rot. YouTube uses its oEmbed endpoint instead of the page; Instagram is not fetched (it serves only a login wall). URLs are canonicalised on save so a link shared twice from a phone lands on the same card.
+
+## Transcripts
+
+A video or audio card can carry a transcript, kicked off from the card modal. YouTube URLs use YouTube's own caption track (free, instant, time-coded; fails on videos without captions or when YouTube blocks the request). Uploaded audio/video is decoded in the browser, resampled to 16 kHz mono, split into 4-minute WAV chunks, and each chunk is transcribed by Workers AI `@cf/openai/whisper-large-v3-turbo` (~$0.03/audio-hour) in its own request. Text lands in `card_chunks`, not in the card body, so search covers it without the body becoming unreadable.
 
 ## Search (three layers, one search box)
 
@@ -167,7 +200,7 @@ When a card of type `link` is saved: server-side fetch of the URL, parse OpenGra
 
 **Hybrid results:** run FTS and vector queries in parallel, merge with reciprocal rank fusion (score = sum of 1/(60 + rank) across both lists), return the fused ranking. Expose a toggle in the UI to see each mode alone while tuning.
 
-**Embedding pipeline:** on card create/update, compute sha256 of `(title || body)`. If it differs from `embedding_hash`, mark stale and enqueue an embed (a simple in-process queue or a cron sweep of stale cards is fine; no job infrastructure needed). Embed `title + "\n\n" + body`, truncated to the model's token limit. Cards with empty text keep a null embedding and are excluded from vector search. If a document card's body grows very long, chunking into a separate `card_chunks` table is a v2 concern; do not build it yet.
+**Embedding pipeline:** on card create/update, compute sha256 of `(title || body)`. If it differs from `embedding_hash`, mark stale and enqueue an embed (a simple in-process queue or a cron sweep of stale cards is fine; no job infrastructure needed). Embed `title + "\n\n" + body`, truncated to the model's token limit. Cards with empty text keep a null embedding and are excluded from vector search. Long secondary text (transcripts) lives in `card_chunks`, each chunk embedded separately; FTS and semantic search union card rows with chunk rows and keep the best match per card.
 
 ## API surface (v1)
 

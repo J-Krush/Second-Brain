@@ -33,12 +33,13 @@ export type Hero =
   | { kind: "image"; fileId: string; w: number | null; h: number | null }
   | { kind: "pdf"; fileId: string; bytes: number }
   | { kind: "audio"; fileId: string }
+  | { kind: "video"; fileId: string }
   | { kind: "og"; fileId: string }
   | null;
 
 /**
  * The one visual that represents a card: the first inline image in body
- * order, else the link's OG image, else an attached PDF, else audio.
+ * order, else the link's OG image, else an attached PDF, else audio, else video.
  */
 export function heroOf(card: { type: string; body: string | null; url: string | null; props: unknown; files: FileRef[] }): Hero {
   const byId = new Map(card.files.map((f) => [f.id, f]));
@@ -52,6 +53,8 @@ export function heroOf(card: { type: string; body: string | null; url: string | 
   if (pdf) return { kind: "pdf", fileId: pdf.id, bytes: pdf.bytes };
   const audio = card.files.find((f) => f.mime.startsWith("audio/"));
   if (audio) return { kind: "audio", fileId: audio.id };
+  const video = card.files.find((f) => f.mime.startsWith("video/"));
+  if (video) return { kind: "video", fileId: video.id };
   const image = card.files.find((f) => f.role === "inline" && f.mime.startsWith("image/"));
   if (image) return { kind: "image", fileId: image.id, w: image.width, h: image.height };
   return null;

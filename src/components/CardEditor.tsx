@@ -44,7 +44,7 @@ export function CardEditor({
     try {
       for (const file of Array.from(list)) {
         const id = await uploadFile(file);
-        insertAtCursor(`\n![${file.name}](file:${id})\n`);
+        insertAtCursor(`\n${file.type.startsWith("image/") ? "!" : ""}[${file.name}](file:${id})\n`);
       }
     } finally {
       setUploading(false);
@@ -110,7 +110,7 @@ export function CardEditor({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,audio/*,video/*"
           multiple
           className="hidden"
           onChange={(e) => {

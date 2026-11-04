@@ -32,26 +32,37 @@ curl -X POST https://<your-worker>/api/cards \
 
 | Method | Path | Body / query | Notes |
 | --- | --- | --- | --- |
-| `POST` | `/api/cards` | `{ type?, title?, body?, url?, props? }` | Accepts `CAPTURE_TOKEN`. `type` defaults to `thought`; unknown types are rejected. To capture a link send `type: "link"` and `url` (the browser composer derives these from a leading URL; the API does not). `url` is canonicalised (tracking params and fragment dropped, YouTube forms unified; same on `PATCH`). Server stamps `props.source`, syncs inline file refs, then `after()` runs OG capture (links) and embedding. `201 { card }` |
+| `POST` | `/api/cards` | `{ type?, title?, body?, url?, props? }` | Accepts `CAPTURE_TOKEN`. `type` defaults to `thought`; unknown types are rejected. To capture a link send `type: "link"` and `url` (the browser composer derives these from a leading URL; the API does not). `url` is canonicalised (tracking params and fragment dropped, YouTube forms unified; same on `PATCH`). Server stamps `props.source`, syncs inline file refs, then `after()` runs OG capture (links and videos) and embedding. `201 { card }` |
 | `GET` | `/api/cards` | `?view=inbox\|library&type=a,b&source=k1,k2&tag=1,2&order=asc\|desc&cursor=` | Keyset pagination on `(created_at, id)`; `nextCursor` is `"<iso>\|<uuid>"`. Filters are comma lists, OR within a key, AND across. Source keys: `typed`, `share`, `upload`, `book`, `web:<domain>` |
 | `GET` | `/api/cards/count` | — | `{ inbox }` exact untriaged count |
 | `GET` | `/api/cards/facets` | `?view=inbox\|library` | `{ kinds: [{type,count}], sources: [{key,label,via,domain,count}] }` scoped to the view only |
-| `GET` | `/api/cards/:id` | — | `{ card, tags, files, boards, links, backlinks }` — boards it appears on, outgoing edges, incoming edges |
-| `PATCH` | `/api/cards/:id` | `{ type?, title?, body?, url?, props?, triaged? }` | Partial. `triaged: true/false` sets/clears `triaged_at`. Re-syncs refs; re-embeds when `title`/`body` are present; re-captures OG for links when `url` or `type` are present |
+| `GET` | `/api/cards/:id` | — | `{ card, tags, files, boards, links, backlinks, transcript }` — boards it appears on, outgoing edges, incoming edges, and the transcript (`null`, or `{ status, source, fileId, language, model, totalChunks, error, updatedAt, chunks: [{ seq, startMs, endMs, text }] }`) |
+| `PATCH` | `/api/cards/:id` | `{ type?, title?, body?, url?, props?, triaged? }` | Partial. `triaged: true/false` sets/clears `triaged_at`. Re-syncs refs; re-embeds when `title`/`body` are present; re-captures OG for links and videos when `url` or `type` are present |
 | `DELETE` | `/api/cards/:id` | — | Soft delete (`deleted_at`); GC hard-deletes after 30 days |
 | `POST` | `/api/cards/:id/tags` | `{ tagId, action: "attach"\|"detach" }` | Attaching auto-triages |
+
+## Transcripts
+
+| Method | Path | Body | Notes |
+| --- | --- | --- | --- |
+| `POST` | `/api/cards/:id/transcribe` | `{ source: "youtube" }` | Card `url` must be a YouTube URL, else 400. Clears existing chunks, sets `pending`, fetches captions in `after()`. `202 { transcript }`; poll `GET /api/cards/:id` until `status` is `done`, `unavailable`, or `failed` |
+| `POST` | `/api/cards/:id/transcribe` | `{ source: "upload", fileId, totalChunks (1–900) }` | File must be active, referenced by this card, and `audio/*` or `video/*`, else 400. Clears existing chunks, sets `running`. `200 { transcript }` |
+| `PUT` | `/api/cards/:id/transcribe/:seq` | raw 16 kHz mono WAV; headers `x-start-ms`, `x-end-ms` | Transcribes one chunk with whisper, stores and embeds it. `200 { seq, text, done }`. `409` unless the transcript is a running upload; `413` over 12 MB; `502 { error }` when whisper fails (retry the same seq) |
+| `DELETE` | `/api/cards/:id/transcribe` | — | Removes the transcript and its chunks |
+
+Client helper: `src/lib/transcribe-client.ts` does fetch → decode → resample → chunk → POST → PUT×N, and resumes a partial run.
 
 ## Search
 
 | Method | Path | Query | Notes |
 | --- | --- | --- | --- |
-| `GET` | `/api/search` | `?q=&mode=quick\|fts\|semantic\|hybrid&type=&tag=&match=all\|any` | `{ mode, hits, degraded }`. Default `hybrid`. `semantic` → `503 {"error":"embeddings not configured"}` when no provider; `hybrid` silently falls back to FTS with `degraded: true`. `match=any` ORs the query's lexemes (fts/hybrid only); default requires every term |
+| `GET` | `/api/search` | `?q=&mode=quick\|fts\|semantic\|hybrid&type=&tag=&match=all\|any` | `{ mode, hits, degraded }`. Default `hybrid`. Each hit has `match: { text, startMs } \| null`, set when the card matched through a transcript chunk. `semantic` → `503 {"error":"embeddings not configured"}` when no provider; `hybrid` silently falls back to FTS with `degraded: true`. `match=any` ORs the query's lexemes (fts/hybrid only); default requires every term |
 
 ## Ask
 
 | Method | Path | Body | Notes |
 | --- | --- | --- | --- |
-| `POST` | `/api/ask` | `{ question (1–2000 chars), type?, tag? }` | Streams `application/x-ndjson`, one `AskEvent` per line: first `{type:"sources", sources[], degraded, model}` (`model` is `null` when the provider is off), then `{type:"delta", text}`… and `{type:"done", citations[]}`, or `{type:"error", message}`. Each source has `index` (1-based, what the answer cites as `[n]`), `id`, `type`, `title`, `excerpt` (image embeds stripped), `url`, `createdAt`, `score`. Retrieval mode, passage count/length, model and answer limits come from the ask settings. Retrieval finishes before the response is committed; without a model, `done` follows `sources` immediately |
+| `POST` | `/api/ask` | `{ question (1–2000 chars), type?, tag? }` | Streams `application/x-ndjson`, one `AskEvent` per line: first `{type:"sources", sources[], degraded, model}` (`model` is `null` when the provider is off), then `{type:"delta", text}`… and `{type:"done", citations[]}`, or `{type:"error", message}`. Each source has `index` (1-based, what the answer cites as `[n]`), `id`, `type`, `title`, `excerpt` (file embeds and attachment links stripped; a transcript hit leads with `Transcript at m:ss: <matched chunk>`), `url`, `createdAt`, `score`. Retrieval mode, passage count/length, model and answer limits come from the ask settings. Retrieval finishes before the response is committed; without a model, `done` follows `sources` immediately |
 
 ## Settings
 
@@ -88,7 +99,7 @@ curl -X POST https://<your-worker>/api/cards \
 | --- | --- | --- | --- |
 | `POST` | `/api/files/presign` | `{ sha256, mime, bytes }` | `{ fileId, existing: true }` if an active file with that hash exists (skip the upload), else `{ fileId, existing: false, uploadUrl }` for a presigned PUT against a `pending` row |
 | `POST` | `/api/files/:id/confirm` | — | Verifies the object, records dimensions, builds `thumb-400`/`thumb-1200` webp via Images, flips to `active` |
-| `GET` | `/api/files/:id/:variant` | `variant ∈ original\|thumb-400\|thumb-1200` | 302 to a short-TTL presigned GET. Non-images fall back to `original` |
+| `GET` | `/api/files/:id/:variant` | `variant ∈ original\|thumb-400\|thumb-1200`, `?proxy=1` | 302 to a short-TTL presigned GET. Non-images fall back to `original`. `original?proxy=1` streams the bytes through the Worker instead (the bucket has no CORS, and the transcriber must `fetch()` them) |
 
 Client helper: `src/lib/upload-client.ts` does hash → presign → PUT → confirm.
 
@@ -104,7 +115,7 @@ Client helper: `src/lib/upload-client.ts` does hash → presign → PUT → conf
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET`/`POST` | `/api/admin/gc` | Garbage collection; `GET` is what the Cron Trigger sends. Returns counts of what it removed |
-| `GET`/`POST` | `/api/admin/embed-sweep` | Embed stale/unembedded cards in a batch |
+| `GET`/`POST` | `/api/admin/embed-sweep` | Embed stale/unembedded cards in a batch, retry YouTube transcripts stuck for 10+ minutes, embed unembedded transcript chunks. `{ embedded, chunksEmbedded, transcriptsRetried }` |
 | `POST` | `/api/admin/reconcile` | Diff bucket keys against `files.r2_prefix`; delete strays |
 
 Schedules live in `wrangler.jsonc` → `triggers.crons` and are dispatched by `worker.ts`.

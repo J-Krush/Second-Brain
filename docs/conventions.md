@@ -76,3 +76,5 @@ Type: `font-display` (Bricolage Grotesque) for titles, `font-sans` (Space Grotes
 **A filter.** Extend `ListParams` + the SQL in `listCards`, parse the comma list in `src/app/api/cards/route.ts` with `csv()`, add the counts to `listFacets`, and render another `FacetMenu` in `Shell.tsx`. The URL key, the API key, and the facet key are the same word.
 
 **A background job.** A route under `/api/admin/` guarded by `CRON_SECRET`, a cron expression in `wrangler.jsonc`, and the mapping in `worker.ts`. Add a button to `AdminActions.tsx` so it can be run by hand.
+
+**A Workers AI call.** Add the model's input/output shapes and a `run` overload to `AiBinding` in `src/lib/workers-ai.ts`, then call `aiBinding()` and fall back to `aiRest()` (REST with `CF_ACCOUNT_ID`/`CF_AI_TOKEN` under `next dev`), narrowing the REST envelope with a typed boundary interface. Gate the feature on `workersAiConfigured()`. Embeddings, `/ask` generation and whisper all follow this; do not import `getCloudflareContext` for AI anywhere else.

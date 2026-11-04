@@ -9,6 +9,7 @@ const hit = {
   url: null,
   createdAt: "2026-01-01T00:00:00.000Z",
   score: 0.5,
+  match: null,
 };
 
 describe("parseCitations", () => {
@@ -38,6 +39,14 @@ describe("toSource", () => {
     expect(long.length).toBe(1501);
     expect(long.endsWith("…")).toBe(true);
     expect(toSource({ ...hit, body: "x".repeat(2000) }, 1, 300).excerpt.length).toBe(301);
+  });
+
+  it("leads a transcript hit with the matched passage and its timestamp, dropping attachment links", () => {
+    const s = toSource(
+      { ...hit, body: "[memo.m4a](file:1d466254-d7ff-4417-a466-1b7b41b86192)\nVoice memo.", match: { text: "remember marmalade", startMs: 240000 } },
+      1,
+    );
+    expect(s.excerpt).toBe("Transcript at 4:00: remember marmalade\n\nVoice memo.");
   });
 });
 

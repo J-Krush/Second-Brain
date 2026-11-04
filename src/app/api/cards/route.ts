@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
   const parsed = createSchema.safeParse(payload);
   if (!parsed.success) return badRequest(parsed.error.issues[0]?.message ?? "invalid");
   const card = await createCard(parsed.data);
-  if (card.type === "link" && card.url) {
+  if ((card.type === "link" || card.type === "video") && card.url) {
     after(() => captureLink(card.id, card.url!));
   }
   after(() => embedCard(card.id));

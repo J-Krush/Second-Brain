@@ -13,9 +13,12 @@ export type BrainCard = {
 export type Scope = "inbox" | "library";
 export type View = "timeline" | "desk";
 
-export const INLINE_FILE_RE = /!\[[^\]]*\]\(file:([0-9a-f-]+)\)/gi;
+export const INLINE_FILE_RE = /!?\[[^\]]*\]\(file:([0-9a-f-]+)\)/gi;
 
-/** Body text with inline `![..](file:..)` embeds removed (they render as the hero). */
+/**
+ * Body text with `![..](file:..)` embeds and `[..](file:..)` attachment links removed (the
+ * file renders as the hero).
+ */
 export function displayBody(card: { body: string | null }): string {
   if (!card.body) return "";
   return card.body.replace(INLINE_FILE_RE, "").replace(/\n{3,}/g, "\n\n").trim();

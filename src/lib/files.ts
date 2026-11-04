@@ -7,6 +7,7 @@ import type { FileRow } from "@/db/schema";
 import {
   deleteByPrefix,
   getObjectBytes,
+  getObjectStream,
   headObject,
   presignGet,
   presignPut,
@@ -157,6 +158,20 @@ export async function getVariantUrl(
   // Non-images have no thumbnails; fall back to the original.
   const effective = variant !== "original" && !isImage(row.mime) ? "original" : variant;
   return presignGet(variantKey(row, effective));
+}
+
+/**
+ * The original bytes of an active file as a stream, with its stored mime.
+ * Backs `?proxy=1`: presigned R2 URLs carry no CORS headers, so a browser
+ * that must read the bytes (to decode audio) has to get them same-origin.
+ */
+export async function openOriginal(
+  fileId: string,
+): Promise<{ body: ReadableStream<Uint8Array>; mime: string; size: string | null } | null> {
+  const [row] = await db.select().from(files).where(eq(files.id, fileId)).limit(1);
+  if (!row || row.status !== "active") return null;
+  const object = await getObjectStream(originalKey(row));
+  return object && { ...object, mime: row.mime };
 }
 
 export async function deleteFileObjects(prefix: string): Promise<number> {

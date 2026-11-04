@@ -243,6 +243,7 @@ function Tile({ card }: { card: BrainCard }) {
         </div>
       );
     case "audio":
+    case "video":
       return (
         <div className="rounded-2xl bg-ember/[0.07] px-4 py-4 ring-1 ring-inset ring-ember/15">
           {card.title && <h3 className="mb-2 font-display text-[15px] font-bold tracking-tight text-ink">{card.title}</h3>}

@@ -31,25 +31,38 @@ interface WorkersAiEmbeddingResponse {
   result?: { data: number[][] };
 }
 
-export async function embedText(text: string): Promise<number[]> {
+/**
+ * Embed several texts in one model call, in input order. Batching is how the
+ * transcript chunk sweep keeps per-passage embeddings cheap.
+ */
+export async function embedTexts(texts: string[]): Promise<number[][]> {
+  const input = { text: texts.map((t) => t.slice(0, MAX_CHARS)) };
   const binding = aiBinding();
+  let vectors: number[][] | undefined;
   if (binding) {
-    const vector = (await binding.run(MODEL, { text: [text] })).data[0];
-    if (!vector) throw new Error("Workers AI embedding returned no vector");
-    return vector;
+    vectors = (await binding.run(MODEL, input)).data;
+  } else {
+    const res = await aiRest(MODEL, input);
+    const data = (await res.json()) as WorkersAiEmbeddingResponse;
+    if (!res.ok || !data.success) {
+      throw new Error(`Workers AI embedding failed: ${data.errors?.[0]?.message ?? res.status}`);
+    }
+    vectors = data.result?.data;
   }
-  const res = await aiRest(MODEL, { text: [text] });
-  const data = (await res.json()) as WorkersAiEmbeddingResponse;
-  const vector = data.result?.data[0];
-  if (!res.ok || !data.success || !vector) {
-    throw new Error(
-      `Workers AI embedding failed: ${data.errors?.[0]?.message ?? res.status}`,
-    );
+  if (vectors?.length !== texts.length) {
+    throw new Error(`Workers AI embedding returned ${vectors?.length ?? 0} vectors for ${texts.length} texts`);
   }
+  return vectors;
+}
+
+export async function embedText(text: string): Promise<number[]> {
+  const [vector] = await embedTexts([text]);
+  if (!vector) throw new Error("Workers AI embedding returned no vector");
   return vector;
 }
 
-function toVectorLiteral(vec: number[]): string {
+/** pgvector text literal; bound as a parameter and cast with `::vector` in SQL. */
+export function toVectorLiteral(vec: number[]): string {
   return `[${vec.join(",")}]`;
 }
 

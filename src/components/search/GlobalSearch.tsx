@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { isTyping, Kbd } from "@/components/brain/parts";
 import { styleFor } from "@/components/card-style";
 import { openCard } from "@/lib/card-url";
-import { relativeTime } from "@/lib/format";
+import { fmtTimestamp, relativeTime } from "@/lib/format";
 
 interface Hit {
   id: string;
@@ -16,6 +16,7 @@ interface Hit {
   url: string | null;
   createdAt: string;
   score: number;
+  match: { text: string; startMs: number | null } | null;
 }
 
 interface SearchResponse {
@@ -221,7 +222,15 @@ export function GlobalSearch() {
                               <span className={`w-5 flex-none text-center font-mono text-sm ${isActive ? "" : style.text}`}>
                                 {style.glyph}
                               </span>
-                              <span className="min-w-0 flex-1 truncate text-[13px]">{snippet(hit)}</span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[13px]">{snippet(hit)}</span>
+                                {hit.match && (
+                                  <span className="block truncate font-mono text-[11px] text-ink-faint">
+                                    {hit.match.startMs !== null && `${fmtTimestamp(hit.match.startMs)} · `}
+                                    {hit.match.text}
+                                  </span>
+                                )}
+                              </span>
                               <span className="flex-none font-mono text-[10px] text-ink-faint">{relativeTime(hit.createdAt)}</span>
                               <span className="w-10 flex-none text-right font-mono text-[10px] tabular-nums text-ink-faint">
                                 {hit.score.toFixed(2)}

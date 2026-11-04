@@ -2,10 +2,10 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { env } from "./env";
 
 /**
- * One door to Workers AI for every model we run (embeddings, /ask). In the
- * deployed Worker it is the `AI` binding; under `next dev` remote bindings
- * are off and wrangler hands back a stub that throws, so dev goes through
- * the REST API when CF_ACCOUNT_ID / CF_AI_TOKEN are set.
+ * One door to Workers AI for every model we run (embeddings, /ask, speech to
+ * text). In the deployed Worker it is the `AI` binding; under `next dev`
+ * remote bindings are off and wrangler hands back a stub that throws, so dev
+ * goes through the REST API when CF_ACCOUNT_ID / CF_AI_TOKEN are set.
  */
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -18,9 +18,21 @@ export interface ChatInput {
   temperature: number;
 }
 
+/** @cf/openai/whisper-large-v3-turbo input: base64 audio, VAD trims silence. */
+export interface WhisperInput {
+  audio: string;
+  vad_filter: boolean;
+}
+
+export interface WhisperOutput {
+  text: string;
+  transcription_info?: { language?: string };
+}
+
 export interface AiBinding {
   run(model: string, input: { text: string[] }): Promise<{ data: number[][] }>;
   run(model: string, input: ChatInput & { stream: true }): Promise<ReadableStream<Uint8Array>>;
+  run(model: string, input: WhisperInput): Promise<WhisperOutput>;
 }
 
 interface AiEnv {
