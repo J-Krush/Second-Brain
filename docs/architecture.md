@@ -46,9 +46,9 @@ Upload is client-driven and dedupes on content hash: the client computes sha256 
 `GET /api/search?q=&mode=quick|fts|semantic|hybrid` (`src/lib/search.ts`):
 
 - **quick** — `word_similarity` on `title` (pg_trgm), threshold 0.2; typo-tolerant as-you-type.
-- **fts** — `websearch_to_tsquery` against the generated `search` tsvector, `ts_rank`, title weighted A over body B.
+- **fts** — `websearch_to_tsquery` against the generated `search` tsvector, `ts_rank`, title weighted A over body B. With `match=all` (the default) the last whitespace-separated chunk, the one being typed, matches either as a whole term (`node.js`, or `shares` through its stem) or as the start of a word in the title or body (a case-insensitive regex: `runn` → "running", `example.c` → "example.com"); every other term must still match. Negations, quoted phrases and `or` operands stay plain websearch. `match=any` (the /ask retrieval default) ORs lexemes instead.
 - **semantic** — cosine distance over `embedding` using the HNSW index; 503 if no embedding provider is configured.
-- **hybrid** (default) — fts and semantic in parallel, merged with reciprocal rank fusion (`src/lib/rrf.ts`, k = 60). Returns `degraded: true` when it had to fall back to fts alone; the UI shows an amber note.
+- **hybrid** (default, used by the `/` palette) — fts and semantic in parallel, merged with reciprocal rank fusion (`src/lib/rrf.ts`, k = 60). Returns `degraded: true` when semantic was unavailable; the UI shows an amber note.
 
 ## Ask
 

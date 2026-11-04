@@ -46,6 +46,8 @@ Log in at `/login`. `⌘J` to capture, `⌘K` to search.
 | `pnpm dev` | `next dev` on :3001 with OpenNext's dev shim (`initOpenNextCloudflareForDev`, remote bindings off) |
 | `pnpm typecheck` | `tsc --noEmit` for the app **and** `tsc -p tsconfig.worker.json` for `worker.ts` (different `lib` set; both must pass) |
 | `pnpm test` | `vitest run` — pure unit tests (`src/lib/*.test.ts`), no DB |
+| `pnpm e2e` | Playwright against an **already running** app at `UAT_BASE_URL` (default `http://localhost:3001`). One-time: `pnpm exec playwright install chromium`. Auth: `UAT_PASSWORD` logs in through `/login` (needed for deployed targets); without it the setup seals a session cookie from `SESSION_SECRET` in `.env.local`. Tests create uniquely-named cards and soft-delete them afterwards. `UAT_VIDEO=on` records every test. Report: `pnpm exec playwright show-report tests/.report` |
+| `.claude/skills/uat/bin/uat-gate` | UAT receipts for the PR gate (`status`, `pass`, `skip [--branch]`, `mode ask\|auto\|off [--global]`, `reset`). Claude Code asks once to trust the project hook in `.claude/settings.json`; OMP loads `.omp/hooks/` itself |
 | `pnpm db:migrate` | `scripts/migrate.ts` against `DATABASE_URL` (reads `.env.local` then `.env`) |
 | `pnpm hash-password "…"` | Prints an `APP_PASSWORD_HASH` |
 | `pnpm preview` | Builds with `opennextjs-cloudflare` and runs the real Worker locally under `wrangler`, reading `.dev.vars`. Closest thing to production; use it before touching `worker.ts`, bindings, or anything edge-specific |
@@ -88,3 +90,4 @@ Console at <http://localhost:9001> (`minioadmin` / `minioadmin`). The app uses p
 - The DB client is a `Proxy` that resolves a pool per request context. Never cache a `db` reference across requests or in module scope; import `{ db }` and use it inside the handler.
 - `⌘N` is reserved by every browser, which is why capture is `⌘J`.
 - Sessions are stateless (sealed cookie, no table), so resetting the database does not log you out and changing `SESSION_SECRET` logs everyone out.
+- **Parallel worktrees share the docker containers but not the database or secrets** (each `.env.local` names its own DB, e.g. `secondbrain_ingest`). Before testing in a browser, confirm the server on the port is *this* checkout: `lsof -a -p "$(lsof -tiTCP:3001 -sTCP:LISTEN)" -d cwd`. `next dev` refuses a second server per directory and tells you the port of the existing one.

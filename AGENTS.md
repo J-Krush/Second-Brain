@@ -25,5 +25,6 @@ Single-user knowledge base: Next.js 16 on Cloudflare Workers, Postgres (pgvector
 - Migrations are additive-first and must work against the currently deployed Worker (CI migrates before deploying).
 - Reuse the existing pattern (one way to fetch, filter, overlay, authorize). Delete what you replace; no shims.
 - Keep docs in the same PR as the behaviour they describe.
+- User flows have specs in `specs/` and Playwright tests in `tests/`; a branch gets one UAT pass by the `uat-qa` agent before its PR leaves draft (gated; see `docs/conventions.md#verification`).
 
 Local setup: `docs/local-development.md` (`docker compose up -d`, `.env.example`, `pnpm db:migrate`, `pnpm dev` on :3001).
