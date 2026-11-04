@@ -1,6 +1,7 @@
 ---
 name: uat-qa
 description: Fresh-context adversarial QA of a whole branch before its PR leaves draft. Use when the UAT gate blocks `gh pr create`/`gh pr ready`, or when asked to UAT or QA a branch. Not for per-task checks while building.
+model: claude-opus-5-5
 skills:
   - uat
 ---

@@ -1,6 +1,8 @@
 ---
 name: uat-qa
 description: Fresh-context adversarial QA of a whole branch before its PR leaves draft. Use when the UAT gate blocks a PR, or when asked to UAT or QA a branch. Not for per-task checks while building.
+model: anthropic/claude-opus-5-5
+thinking-level: high
 autoloadSkills:
   - uat
 blocking: true
