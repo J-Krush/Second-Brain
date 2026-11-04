@@ -63,7 +63,7 @@ Limits: browser decode holds the whole PCM in memory (~230 MB/hour of 16 kHz flo
 - **semantic** — cosine distance over `cards.embedding` and `card_chunks.embedding`, each branch using its own HNSW index, best row per card; 503 if no embedding provider is configured.
 - **hybrid** (default) — fts and semantic in parallel, merged with reciprocal rank fusion (`src/lib/rrf.ts`, k = 60). Returns `degraded: true` when it had to fall back to fts alone; the UI shows an amber note.
 
-A hit whose best evidence was a transcript chunk carries `match: { text, startMs }`; the palette shows it as a `m:ss · …` line under the title.
+Each card ranks by its best row (its own text or any transcript chunk) and carries its best-matching chunk as `match: { text, startMs }` whenever one matched; the palette shows it as a `m:ss · …` line under the title and `/ask` leads the passage with it.
 
 ## Ask
 

@@ -21,7 +21,7 @@ export interface SearchHit {
   url: string | null;
   createdAt: string;
   score: number;
-  /** Non-null when the best evidence for the card was a transcript chunk rather than the card itself. */
+  /** The best-matching transcript chunk, whenever one matched (even if the card's own text ranked higher). */
   match: SearchMatch | null;
 }
 
@@ -117,7 +117,9 @@ function tsquery(q: string, match: SearchFilters["match"]) {
 
 /**
  * Full-text: the tsquery against the card's generated `search` column and
- * every transcript chunk's, keeping each card's best-ranked row.
+ * every transcript chunk's. Each card ranks by its best row and carries its
+ * best chunk as `match` whenever a chunk matched, so /ask and the palette see
+ * the transcript evidence even when the title also hit.
  * Chunk vectors are unweighted (D) while card titles/bodies carry A/B, so
  * ts_rank already ranks a transcript-only hit below an equal card hit. The
  * headline runs only on the final page of rows because it re-parses the text.
@@ -135,7 +137,10 @@ export async function searchFts(
            best.match_start_ms
     FROM (
       SELECT * FROM (
-        SELECT DISTINCT ON (hit.id) hit.*
+        SELECT DISTINCT ON (hit.id)
+               hit.id, hit.type, hit.title, hit.body, hit.url, hit."createdAt",
+               max(hit.score) OVER (PARTITION BY hit.id) AS score,
+               hit.chunk_text, hit.match_start_ms
         FROM (
           SELECT c.id, c.type, c.title, c.body, c.url,
                  c.created_at AS "createdAt",
@@ -160,7 +165,7 @@ export async function searchFts(
             ${typeFragment(filters.type)}
             ${tagFragment(filters.tagId)}
         ) hit
-        ORDER BY hit.id, hit.score DESC
+        ORDER BY hit.id, hit.chunk_text IS NULL, hit.score DESC
       ) per_card
       ORDER BY per_card.score DESC
       LIMIT ${limit}
@@ -171,8 +176,9 @@ export async function searchFts(
 }
 
 /**
- * Semantic: cosine distance over the card and transcript-chunk embeddings,
- * keeping each card's closest row. Score is similarity (1 - distance). Each
+ * Semantic: cosine distance over the card and transcript-chunk embeddings.
+ * Score is similarity (1 - distance), each card ranked by its closest row and
+ * carrying its closest chunk as `match` when any chunk made the cut. Each
  * branch orders and limits by `<=>` on its own so Postgres can use that
  * table's HNSW index; rows without an embedding are excluded by the NOT NULL
  * guards.
@@ -185,7 +191,10 @@ export async function semanticByVector(
   const literal = `[${vec.join(",")}]`;
   const rows = await db.execute(sql`
     SELECT * FROM (
-      SELECT DISTINCT ON (hit.id) hit.*
+      SELECT DISTINCT ON (hit.id)
+             hit.id, hit.type, hit.title, hit.body, hit.url, hit."createdAt",
+             max(hit.score) OVER (PARTITION BY hit.id) AS score,
+             hit.match_text, hit.match_start_ms
       FROM (
         (
           SELECT c.id, c.type, c.title, c.body, c.url,
@@ -218,7 +227,7 @@ export async function semanticByVector(
           LIMIT ${limit}
         )
       ) hit
-      ORDER BY hit.id, hit.score DESC
+      ORDER BY hit.id, hit.match_text IS NULL, hit.score DESC
     ) best
     ORDER BY best.score DESC
     LIMIT ${limit}

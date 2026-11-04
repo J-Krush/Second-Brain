@@ -56,7 +56,7 @@ Client helper: `src/lib/transcribe-client.ts` does fetch → decode → resample
 
 | Method | Path | Query | Notes |
 | --- | --- | --- | --- |
-| `GET` | `/api/search` | `?q=&mode=quick\|fts\|semantic\|hybrid&type=&tag=&match=all\|any` | `{ mode, hits, degraded }`. Default `hybrid`. Each hit has `match: { text, startMs } \| null`, set when the card matched through a transcript chunk. `semantic` → `503 {"error":"embeddings not configured"}` when no provider; `hybrid` silently falls back to FTS with `degraded: true`. `match=any` ORs the query's lexemes (fts/hybrid only); default requires every term |
+| `GET` | `/api/search` | `?q=&mode=quick\|fts\|semantic\|hybrid&type=&tag=&match=all\|any` | `{ mode, hits, degraded }`. Default `hybrid`. Each hit has `match: { text, startMs } \| null`: the card's best-matching transcript chunk, set whenever a chunk matched (the card still ranks by its best row, chunk or card). `semantic` → `503 {"error":"embeddings not configured"}` when no provider; `hybrid` silently falls back to FTS with `degraded: true`. `match=any` ORs the query's lexemes (fts/hybrid only); default requires every term |
 
 ## Ask
 
